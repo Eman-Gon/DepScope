@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from '@/components/Header';
 import SearchInput from '@/components/SearchInput';
@@ -9,55 +9,32 @@ import FindingsList from '@/components/FindingsList';
 import AlternativesTable from '@/components/AlternativesTable';
 import PatternInsights from '@/components/PatternInsights';
 import VerdictBox from '@/components/VerdictBox';
-import { mockAnalysisResult } from '@/data/mockData';
+import { useAnalysis } from '@/hooks/useAnalysis';
+import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const [agentsComplete, setAgentsComplete] = useState([false, false, false]);
-  const [showMainContent, setShowMainContent] = useState(false);
+  const {
+    agents,
+    result,
+    isAnalyzing,
+    showResults,
+    showMainContent,
+    error,
+    analyze,
+  } = useAnalysis();
 
-  const handleAnalyze = () => {
-    setIsAnalyzing(true);
-    setShowResults(true);
-    setAgentsComplete([false, false, false]);
-    setShowMainContent(false);
+  const { toast } = useToast();
 
-    // Simulate agent completion with staggered timing
-    setTimeout(() => setAgentsComplete([true, false, false]), 800);
-    setTimeout(() => setAgentsComplete([true, true, false]), 1400);
-    setTimeout(() => {
-      setAgentsComplete([true, true, true]);
-      setIsAnalyzing(false);
-    }, 2000);
-    setTimeout(() => setShowMainContent(true), 2300);
-  };
-
-  const agents = [
-    {
-      title: 'Repo Health',
-      icon: 'database' as const,
-      status: agentsComplete[0] ? 'Complete ✓' : 'Analyzing...',
-      progress: 'Analyzed 356 commits',
-    },
-    {
-      title: 'Research Engine',
-      icon: 'search' as const,
-      status: agentsComplete[1] ? 'Complete ✓' : 'Searching...',
-      progress: 'Found 1 CVE, 3 alternatives',
-    },
-    {
-      title: 'Risk Scorer',
-      icon: 'shield' as const,
-      status: agentsComplete[2] ? 'Complete ✓' : 'Scoring...',
-      progress: 'Generated risk assessment',
-    },
-  ];
+  useEffect(() => {
+    if (error) {
+      toast({ title: 'Analysis Error', description: error, variant: 'destructive' });
+    }
+  }, [error]);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container mx-auto px-6 py-12">
         {/* Search Section */}
         <motion.div
@@ -72,7 +49,7 @@ const Index = () => {
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
             Get instant insights into package health, security vulnerabilities, and maintenance status.
           </p>
-          <SearchInput onAnalyze={handleAnalyze} isLoading={isAnalyzing} />
+          <SearchInput onAnalyze={analyze} isLoading={isAnalyzing} />
         </motion.div>
 
         <AnimatePresence>
@@ -88,16 +65,33 @@ const Index = () => {
                 {agents.map((agent, index) => (
                   <AgentStatusCard
                     key={agent.title}
-                    {...agent}
-                    isComplete={agentsComplete[index]}
+                    title={agent.title}
+                    icon={agent.icon}
+                    status={agent.status}
+                    progress={agent.progress}
+                    isComplete={agent.isComplete}
                     delay={index * 0.15}
                   />
                 ))}
               </div>
 
-              {/* Main Content - Two Columns */}
+              {/* Error Display */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="p-6 rounded-lg bg-red-500/10 border border-red-500/30 text-center"
+                >
+                  <p className="text-red-400 font-medium">{error}</p>
+                  <p className="text-muted-foreground text-sm mt-2">
+                    Please try again or check that the backend is running on port 3000.
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Main Content */}
               <AnimatePresence>
-                {showMainContent && (
+                {showMainContent && result && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -107,32 +101,34 @@ const Index = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                       {/* Left Column - Grade & Chart */}
                       <div className="space-y-8 p-6 rounded-xl bg-card border border-border">
-                        <GradeDisplay 
-                          grade={mockAnalysisResult.grade} 
-                          rationale={mockAnalysisResult.gradeRationale} 
+                        <GradeDisplay
+                          grade={result.grade}
+                          rationale={result.gradeRationale}
                         />
-                        <RadarChartComponent scores={mockAnalysisResult.scores} />
+                        <RadarChartComponent scores={result.scores} />
                       </div>
 
                       {/* Right Column - Findings */}
                       <div className="p-6 rounded-xl bg-card border border-border">
-                        <FindingsList findings={mockAnalysisResult.findings} />
+                        <FindingsList findings={result.findings} />
                       </div>
                     </div>
 
                     {/* Alternatives Table */}
-                    <AlternativesTable alternatives={mockAnalysisResult.alternatives} />
+                    <AlternativesTable alternatives={result.alternatives} />
 
-                    {/* Pattern Insights */}
-                    <PatternInsights 
-                      totalAnalyzed={mockAnalysisResult.patternInsights.totalAnalyzed}
-                      insights={mockAnalysisResult.patternInsights.insights}
-                    />
+                    {/* Pattern Insights - only if data available */}
+                    {result.patternInsights.insights.length > 0 && (
+                      <PatternInsights
+                        totalAnalyzed={result.patternInsights.totalAnalyzed}
+                        insights={result.patternInsights.insights}
+                      />
+                    )}
 
                     {/* Verdict */}
-                    <VerdictBox 
-                      verdict={mockAnalysisResult.verdict} 
-                      grade={mockAnalysisResult.grade}
+                    <VerdictBox
+                      verdict={result.verdict}
+                      grade={result.grade}
                     />
                   </motion.div>
                 )}
