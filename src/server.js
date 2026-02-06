@@ -255,6 +255,34 @@ app.post('/api/alert/configure', (req, res) => {
   return res.json({ message: 'Alert phone configured', phone });
 });
 
+// GET /api/plivo/test-voice — test voice XML for Plivo integration testing
+app.get('/api/plivo/test-voice', (_req, res) => {
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Speak voice="Polly.Matthew" language="en-US">This is a test call from DepScope dependency monitor. DepScope Alert: 2 monitored packages have received a failing grade. lodash, critical vulnerability: prototype pollution in versions before 4.17.21. event-stream, critical: supply chain attack detected in version 3.3.6. Immediate review is recommended. Press 1 to receive the full report by text. Press 2 to dismiss.</Speak>
+  <GetDigits action="${config.BASE_URL}/api/plivo/test-input"
+             method="POST" timeout="10" numDigits="1">
+    <Speak>Please press 1 or 2.</Speak>
+  </GetDigits>
+</Response>`);
+});
+
+// POST /api/plivo/test-input — test DTMF handler
+app.post('/api/plivo/test-input', (req, res) => {
+  const digits = req.body.Digits;
+  res.type('application/xml');
+  if (digits === '1') {
+    if (alertPhone) {
+      sendSMS(alertPhone, 'DepScope Test Report: lodash (Grade F) - prototype pollution CVE. event-stream (Grade F) - supply chain attack. Review at your dashboard.').catch(() => {});
+    }
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response><Speak>Test report sent to your phone. Goodbye.</Speak></Response>`);
+  }
+  return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response><Speak>Dismissed. Plivo test complete. Goodbye.</Speak></Response>`);
+});
+
 // ─── Plivo voice endpoints ──────────────────────────────────────────────────
 
 // GET /api/plivo/voice-xml/:analysisId  — returns XML when Plivo connects the call
