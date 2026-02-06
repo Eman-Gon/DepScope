@@ -238,6 +238,11 @@ Respond with ONLY valid JSON in this exact format:
         finalGrade = 'D';
       }
 
+      // Archived or deprecated repo → automatic F
+      if (repoHealth.isArchived || repoHealth.isDeprecated) {
+        finalGrade = 'F';
+      }
+
       return { ...assessment, grade: finalGrade, weightedScore: Math.round(weightedScore) };
     } catch (error) {
       console.error(`Gemini synthesis error (attempt ${attempt + 1}):`, error.message);
@@ -249,21 +254,6 @@ Respond with ONLY valid JSON in this exact format:
       // Fall through to local fallback
       break;
     }
-    
-    // Archived or deprecated repo → automatic F
-    if (repoHealth.isArchived || repoHealth.isDeprecated) {
-      finalGrade = 'F';
-    }
-    
-    return {
-      ...assessment,
-      grade: finalGrade,
-      weightedScore: Math.round(weightedScore)
-    };
-    
-  } catch (error) {
-    console.error('Gemini synthesis error:', error);
-    throw new Error(`Failed to synthesize risk assessment: ${error.message}`);
   }
 
   console.warn('[Gemini] All attempts failed, using local fallback synthesizer');
