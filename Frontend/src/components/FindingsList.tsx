@@ -50,7 +50,7 @@ const FindingsList = ({ findings }: FindingsListProps) => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.5 + index * 0.1 }}
-              className="p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors"
+              className="p-4 rounded-xl bg-muted/20 border border-border/40 hover:border-primary/30 hover:bg-muted/40 transition-all duration-200 cursor-pointer"
             >
               <div className="flex items-start gap-3">
                 <span

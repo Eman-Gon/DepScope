@@ -26,10 +26,10 @@ const AgentStatusCard = ({ title, icon, status, progress, isComplete, delay }: A
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay }}
       className={cn(
-        "relative p-6 rounded-xl border bg-card transition-all duration-500",
-        isComplete 
-          ? "border-primary/50 glow-blue" 
-          : "border-border pulse-glow"
+        "relative p-6 rounded-2xl border bg-card/80 backdrop-blur-sm shadow-lg shadow-black/20 transition-all duration-500 hover:shadow-xl cursor-default",
+        isComplete
+          ? "border-primary/50 glow-blue hover:border-primary/70"
+          : "border-border/60 pulse-glow hover:border-border"
       )}
     >
       <div className="flex items-start justify-between">

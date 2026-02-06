@@ -28,15 +28,15 @@ const VerdictBox = ({ verdict, grade }: VerdictBoxProps) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.9 }}
-      className="space-y-4"
+      className="space-y-4 h-full flex flex-col"
     >
       <h2 className="text-lg font-semibold text-foreground tracking-wide uppercase flex items-center gap-2">
         <AlertTriangle className="w-5 h-5 text-orange-500" />
         Verdict
       </h2>
-      <div className={`p-6 rounded-lg border-2 ${getVerdictStyle(grade)}`}>
-        <p className="text-foreground leading-relaxed text-lg font-medium">
-          {verdict}
+      <div className={`flex-1 p-5 rounded-xl border ${getVerdictStyle(grade)}`}>
+        <p className="text-foreground leading-relaxed text-base font-medium">
+          "{verdict}"
         </p>
       </div>
     </motion.div>

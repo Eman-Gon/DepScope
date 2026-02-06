@@ -18,22 +18,20 @@ const PatternInsights = ({ totalAnalyzed, insights }: PatternInsightsProps) => {
         <TrendingUp className="w-5 h-5 text-primary" />
         Pattern Insights
       </h2>
-      <div className="p-6 rounded-lg bg-muted/30 border border-border">
-        <p className="text-muted-foreground mb-4">
-          After analyzing <span className="text-foreground font-semibold">{totalAnalyzed} packages</span>:
-        </p>
-        <ul className="space-y-2">
-          {insights.map((insight, index) => (
-            <li 
-              key={index}
-              className="flex items-start gap-2 text-muted-foreground"
-            >
-              <span className="text-primary">•</span>
-              {insight}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <p className="text-muted-foreground mb-4">
+        After analyzing <span className="text-foreground font-semibold">{totalAnalyzed} packages</span>:
+      </p>
+      <ul className="space-y-3">
+        {insights.map((insight, index) => (
+          <li
+            key={index}
+            className="flex items-start gap-3 text-muted-foreground p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors duration-200"
+          >
+            <span className="text-primary mt-0.5">•</span>
+            {insight}
+          </li>
+        ))}
+      </ul>
     </motion.div>
   );
 };
