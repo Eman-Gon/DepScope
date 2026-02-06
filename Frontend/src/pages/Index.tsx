@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wrench, ArrowRight } from 'lucide-react';
+import { Wrench, ArrowRight, Shield, Search, BarChart3, Plus, History } from 'lucide-react';
 import Header from '@/components/Header';
 import SearchInput from '@/components/SearchInput';
 import AgentStatusCard from '@/components/AgentStatusCard';
@@ -26,6 +26,9 @@ const Index = () => {
     showMainContent,
     error,
     analyze,
+    history,
+    restoreAnalysis,
+    resetForNew,
   } = useAnalysis();
 
   const { toast } = useToast();
@@ -57,6 +60,74 @@ const Index = () => {
           <SearchInput onAnalyze={analyze} isLoading={isAnalyzing} />
         </motion.div>
 
+        {/* Onboarding — visible until the user kicks off an analysis */}
+        <AnimatePresence>
+          {!showResults && !isAnalyzing && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              className="space-y-10 mb-12"
+            >
+              {/* Example repos */}
+              <div className="text-center space-y-3">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Try an example</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {[
+                    { url: 'https://github.com/facebook/react', label: 'React' },
+                    { url: 'https://github.com/font/pacman', label: 'Pacman' },
+                    { url: 'https://github.com/torvalds/linux', label: 'Linux' },
+                    { url: 'https://github.com/Homebrew/homebrew-core', label: 'Homebrew' },
+                    { url: 'https://github.com/openclaw/openclaw', label: 'OpenClaw' },
+                    { url: 'https://github.com/Eman-Gon/DepScope', label: 'DepScope' },
+                  ].map((ex) => (
+                    <button
+                      key={ex.url}
+                      onClick={() => analyze(ex.url)}
+                      className="px-4 py-2 rounded-xl bg-muted/30 border border-border/50 text-sm text-muted-foreground hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all duration-200"
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Feature cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  {
+                    icon: <Shield className="w-6 h-6 text-primary" />,
+                    title: 'Security Scan',
+                    desc: 'We check public vulnerability databases (CVEs) to see if the package has any known security issues — things like prototype pollution, remote code execution, or supply-chain attacks that could put your app at risk.',
+                  },
+                  {
+                    icon: <Search className="w-6 h-6 text-primary" />,
+                    title: 'Community Intel',
+                    desc: 'We look at what developers are saying on Reddit and Hacker News, check how actively the project is maintained on GitHub, and flag "bus factor" risk — whether the project depends on a single maintainer.',
+                  },
+                  {
+                    icon: <BarChart3 className="w-6 h-6 text-primary" />,
+                    title: 'Risk Grade & Report',
+                    desc: 'Everything gets combined into a simple A-F letter grade. You can export the full breakdown as a DEPSCOPE.md report and commit it directly to your repo so your whole team can see it.',
+                  },
+                ].map((card) => (
+                  <div
+                    key={card.title}
+                    className="p-6 rounded-2xl bg-card/80 border border-border/60 shadow-lg shadow-black/20 backdrop-blur-sm text-center space-y-3"
+                  >
+                    <div className="mx-auto w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
+                      {card.icon}
+                    </div>
+                    <h3 className="text-foreground font-semibold">{card.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{card.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {showResults && (
             <motion.div
@@ -65,6 +136,34 @@ const Index = () => {
               exit={{ opacity: 0 }}
               className="space-y-12"
             >
+              {/* New Analysis + History */}
+              {showMainContent && result && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={resetForNew}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Analyze New Repo
+                  </button>
+                  {history.length > 1 && (
+                    <>
+                      <span className="text-muted-foreground/50 text-xs">|</span>
+                      <History className="w-3.5 h-3.5 text-muted-foreground/50" />
+                      {history.filter(h => h.id !== analysisId).map(h => (
+                        <button
+                          key={h.id}
+                          onClick={() => restoreAnalysis(h.id)}
+                          className="px-3 py-1.5 rounded-lg bg-muted/30 border border-border/40 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                        >
+                          {h.result.packageName} ({h.result.grade})
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Agent Status Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {agents.map((agent, index) => (
@@ -166,8 +265,8 @@ const Index = () => {
                       </div>
                     </div>
 
-                    {/* Report Actions */}
-                    {analysisId && (
+                    {/* Report Actions (disable via VITE_DEPSCOPE_ENABLED=false) */}
+                    {analysisId && import.meta.env.VITE_DEPSCOPE_ENABLED !== 'false' && (
                       <ReportActions
                         analysisId={analysisId}
                         packageName={result.packageName}

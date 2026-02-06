@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FileText, Github, Copy, Download, Loader2, ExternalLink } from 'lucide-react';
+import { FileText, Github, Copy, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateReportApi, publishReportApi } from '@/lib/api';
+import { generateReportApi, publishReportApi, type ReportSections } from '@/lib/api';
 
 interface ReportActionsProps {
   analysisId: string;
@@ -16,17 +17,36 @@ interface ReportActionsProps {
   grade: string;
 }
 
+const SECTION_OPTIONS: { key: keyof ReportSections; label: string; description: string }[] = [
+  { key: 'scores', label: 'Score Breakdown', description: 'Dimension scores and grade rationale' },
+  { key: 'repoHealth', label: 'Repository Health', description: 'Stars, forks, contributors, bus factor' },
+  { key: 'findings', label: 'Findings', description: 'Security and maintenance findings by severity' },
+  { key: 'alternatives', label: 'Alternatives', description: 'Alternative packages with migration info' },
+  { key: 'verdict', label: 'Verdict', description: 'Overall recommendation' },
+];
+
 const ReportActions = ({ analysisId, packageName, grade }: ReportActionsProps) => {
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [sections, setSections] = useState<ReportSections>({
+    scores: true,
+    repoHealth: true,
+    findings: true,
+    alternatives: true,
+    verdict: true,
+  });
   const { toast } = useToast();
+
+  const toggleSection = (key: keyof ReportSections) => {
+    setSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const data = await generateReportApi(analysisId);
+      const data = await generateReportApi(analysisId, sections);
       setMarkdown(data.markdown);
       setDialogOpen(true);
     } catch (err: any) {
@@ -39,7 +59,7 @@ const ReportActions = ({ analysisId, packageName, grade }: ReportActionsProps) =
   const handlePublish = async () => {
     setPublishing(true);
     try {
-      const data = await publishReportApi(analysisId);
+      const data = await publishReportApi(analysisId, sections);
       toast({
         title: 'Published to GitHub',
         description: data.message,
@@ -48,7 +68,6 @@ const ReportActions = ({ analysisId, packageName, grade }: ReportActionsProps) =
         window.open(data.url, '_blank');
       }
     } catch (err: any) {
-      // Show the markdown fallback if available
       if (err.markdown) {
         setMarkdown(err.markdown);
         setDialogOpen(true);
@@ -82,30 +101,49 @@ const ReportActions = ({ analysisId, packageName, grade }: ReportActionsProps) =
 
   return (
     <>
-      <div className="flex items-center gap-4 p-4 rounded-2xl bg-card/80 border border-border/60 shadow-lg shadow-black/20 backdrop-blur-sm">
-        <div className="flex-1">
+      <div className="p-5 rounded-2xl bg-card/80 border border-border/60 shadow-lg shadow-black/20 backdrop-blur-sm space-y-4">
+        <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             Export your <span className="font-semibold text-foreground">{packageName}</span> (Grade {grade}) analysis as a DEPSCOPE.md report
           </p>
+          <div className="flex gap-3 shrink-0 ml-4">
+            <Button
+              variant="outline"
+              onClick={handleGenerate}
+              disabled={generating}
+              className="gap-2"
+            >
+              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              Generate Report
+            </Button>
+            <Button
+              variant="default"
+              onClick={handlePublish}
+              disabled={publishing}
+              className="gap-2"
+            >
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
+              Publish to Repo
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleGenerate}
-          disabled={generating}
-          className="gap-2"
-        >
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-          Generate Report
-        </Button>
-        <Button
-          variant="default"
-          onClick={handlePublish}
-          disabled={publishing}
-          className="gap-2"
-        >
-          {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
-          Publish to Repo
-        </Button>
+
+        <div className="flex flex-wrap gap-x-5 gap-y-2 pt-2 border-t border-border/40">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide self-center mr-1">Include:</span>
+          {SECTION_OPTIONS.map(({ key, label, description }) => (
+            <label
+              key={key}
+              className="flex items-center gap-2 cursor-pointer group"
+              title={description}
+            >
+              <Checkbox
+                checked={sections[key]}
+                onCheckedChange={() => toggleSection(key)}
+              />
+              <span className="text-sm text-foreground group-hover:text-primary transition-colors">{label}</span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

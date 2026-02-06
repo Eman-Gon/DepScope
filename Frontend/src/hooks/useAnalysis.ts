@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { startAnalysis, connectStream, fetchResult, fetchPatterns, type AgentEvent } from '@/lib/api';
 import type { AnalysisResult } from '@/data/mockData';
+import { useAnalysisContext } from '@/contexts/AnalysisContext';
 
 export interface AgentStatus {
   title: string;
@@ -56,13 +57,18 @@ function mapPatterns(raw: any): { totalAnalyzed: number; insights: string[] } {
 }
 
 export function useAnalysis() {
-  const [agents, setAgents] = useState<AgentStatus[]>(INITIAL_AGENTS);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const ctx = useAnalysisContext();
+
+  // Restore from context if there's an active analysis
+  const active = ctx.activeId ? ctx.get(ctx.activeId) : undefined;
+
+  const [agents, setAgents] = useState<AgentStatus[]>(active?.agents ?? INITIAL_AGENTS.map(a => ({ ...a })));
+  const [result, setResult] = useState<AnalysisResult | null>(active?.result ?? null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const [showMainContent, setShowMainContent] = useState(false);
+  const [showResults, setShowResults] = useState(!!active);
+  const [showMainContent, setShowMainContent] = useState(!!active);
   const [error, setError] = useState<string | null>(null);
-  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(active?.id ?? null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -120,6 +126,19 @@ export function useAnalysis() {
                 }
                 setResult(mapped);
                 setIsAnalyzing(false);
+
+                // Save to context so it survives navigation
+                setAgents(prev => {
+                  ctx.save({
+                    id,
+                    query,
+                    result: mapped,
+                    agents: prev,
+                    completedAt: new Date().toISOString(),
+                  });
+                  return prev;
+                });
+
                 setTimeout(() => setShowMainContent(true), 300);
               })
               .catch((err) => {
@@ -147,7 +166,45 @@ export function useAnalysis() {
       setError(err.message ?? 'Failed to start analysis');
       setIsAnalyzing(false);
     }
-  }, []);
+  }, [ctx]);
 
-  return { agents, result, analysisId, isAnalyzing, showResults, showMainContent, error, analyze };
+  /** Switch to a previously saved analysis */
+  const restoreAnalysis = useCallback((id: string) => {
+    const saved = ctx.get(id);
+    if (!saved) return;
+    ctx.setActive(id);
+    setAgents(saved.agents);
+    setResult(saved.result);
+    setAnalysisId(saved.id);
+    setShowResults(true);
+    setShowMainContent(true);
+    setIsAnalyzing(false);
+    setError(null);
+  }, [ctx]);
+
+  /** Clear current view to start a fresh analysis */
+  const resetForNew = useCallback(() => {
+    ctx.setActive(null);
+    setAgents(INITIAL_AGENTS.map(a => ({ ...a })));
+    setResult(null);
+    setAnalysisId(null);
+    setShowResults(false);
+    setShowMainContent(false);
+    setIsAnalyzing(false);
+    setError(null);
+  }, [ctx]);
+
+  return {
+    agents,
+    result,
+    analysisId,
+    isAnalyzing,
+    showResults,
+    showMainContent,
+    error,
+    analyze,
+    history: ctx.history,
+    restoreAnalysis,
+    resetForNew,
+  };
 }

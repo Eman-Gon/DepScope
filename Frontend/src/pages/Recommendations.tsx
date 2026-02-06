@@ -254,7 +254,7 @@ const Recommendations = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate('/')}
+                onClick={() => navigate(-1)}
                 className="p-2 rounded-lg hover:bg-muted transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
@@ -574,7 +574,7 @@ const Recommendations = () => {
         {/* Back button */}
         <div className="flex justify-center pb-8">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(-1)}
             className="flex items-center gap-2 px-6 py-3 rounded-xl bg-muted/30 border border-border/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all duration-200"
           >
             <ArrowLeft className="w-4 h-4" />

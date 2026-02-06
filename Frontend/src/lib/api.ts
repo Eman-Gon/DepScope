@@ -50,7 +50,15 @@ export async function fetchPatterns() {
   return res.json();
 }
 
-export async function generateReportApi(analysisId: string): Promise<{
+export interface ReportSections {
+  scores?: boolean;
+  repoHealth?: boolean;
+  findings?: boolean;
+  alternatives?: boolean;
+  verdict?: boolean;
+}
+
+export async function generateReportApi(analysisId: string, sections?: ReportSections): Promise<{
   markdown: string;
   packageName: string;
   grade: string;
@@ -58,6 +66,7 @@ export async function generateReportApi(analysisId: string): Promise<{
   const res = await fetch(`${API_BASE}/api/analyze/${analysisId}/generate-report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sections }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -66,7 +75,7 @@ export async function generateReportApi(analysisId: string): Promise<{
   return res.json();
 }
 
-export async function publishReportApi(analysisId: string): Promise<{
+export async function publishReportApi(analysisId: string, sections?: ReportSections): Promise<{
   success?: boolean;
   sha?: string;
   url?: string;
@@ -77,6 +86,7 @@ export async function publishReportApi(analysisId: string): Promise<{
   const res = await fetch(`${API_BASE}/api/analyze/${analysisId}/publish-report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sections }),
   });
   const data = await res.json();
   if (!res.ok) {

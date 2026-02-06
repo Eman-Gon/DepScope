@@ -275,7 +275,8 @@ app.post('/api/analyze/:id/generate-report', (req, res) => {
     return res.status(400).json({ error: 'Analysis is not yet complete' });
   }
 
-  const markdown = generateReport(analysis);
+  const sections = req.body.sections || undefined;
+  const markdown = generateReport(analysis, sections);
   analysis.generatedReport = markdown;
 
   return res.json({
@@ -293,7 +294,8 @@ app.post('/api/analyze/:id/publish-report', async (req, res) => {
     return res.status(400).json({ error: 'Analysis is not yet complete' });
   }
 
-  const markdown = analysis.generatedReport || generateReport(analysis);
+  const sections = req.body.sections || undefined;
+  const markdown = generateReport(analysis, sections);
 
   const ghMatch = (analysis.input || '').match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
   if (!ghMatch) {
