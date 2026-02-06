@@ -93,6 +93,11 @@ Respond with ONLY valid JSON in this exact format:
       finalGrade = 'D';
     }
     
+    // Archived or deprecated repo → automatic F
+    if (repoHealth.isArchived || repoHealth.isDeprecated) {
+      finalGrade = 'F';
+    }
+    
     return {
       ...assessment,
       grade: finalGrade,
