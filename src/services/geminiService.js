@@ -149,13 +149,26 @@ function localSynthesize(repoHealth, research) {
 // ─── Gemini synthesis with retry + local fallback ────────────────────────────
 
 async function synthesizeRiskAssessment(repoHealth, research) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey.includes('your_')) {
-    console.warn('[Gemini] No API key configured, using local fallback');
-    return localSynthesize(repoHealth, research);
-  }
+  const models = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
+  let lastError;
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      return await _synthesize(model, repoHealth, research);
+    } catch (error) {
+      lastError = error;
+      if (error.status === 429 || error.status === 404) {
+        console.warn(`[Gemini] ${modelName} ${error.status === 429 ? 'rate limited' : 'not found'}, trying next model...`);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function _synthesize(model, repoHealth, research) {
 
   const prompt = `You are a senior software engineer evaluating an open-source dependency for production use.
 
@@ -254,6 +267,18 @@ Respond with ONLY valid JSON in this exact format:
       // Fall through to local fallback
       break;
     }
+    
+    return {
+      ...assessment,
+      grade: finalGrade,
+      weightedScore: Math.round(weightedScore)
+    };
+    
+  } catch (error) {
+    console.error('Gemini synthesis error:', error);
+    // Preserve the original error so status code is available for model fallback
+    error.message = `Failed to synthesize risk assessment: ${error.message}`;
+    throw error;
   }
 
   console.warn('[Gemini] All attempts failed, using local fallback synthesizer');
