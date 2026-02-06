@@ -49,3 +49,40 @@ export async function fetchPatterns() {
   if (!res.ok) throw new Error(`Patterns fetch failed: HTTP ${res.status}`);
   return res.json();
 }
+
+export async function generateReportApi(analysisId: string): Promise<{
+  markdown: string;
+  packageName: string;
+  grade: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/analyze/${analysisId}/generate-report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function publishReportApi(analysisId: string): Promise<{
+  success?: boolean;
+  sha?: string;
+  url?: string;
+  message?: string;
+  error?: string;
+  markdown?: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/analyze/${analysisId}/publish-report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`) as Error & { markdown?: string };
+    err.markdown = data.markdown;
+    throw err;
+  }
+  return data;
+}

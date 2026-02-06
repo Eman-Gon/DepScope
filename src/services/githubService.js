@@ -131,4 +131,86 @@ async function analyzeRepo(repoUrl) {
   }
 }
 
-module.exports = { analyzeRepo };
+async function githubWriteRequest(endpoint, method, data) {
+  if (!GITHUB_TOKEN) {
+    throw new Error('GITHUB_TOKEN is required for write operations');
+  }
+  const response = await axios({
+    method,
+    url: `${GITHUB_API}${endpoint}`,
+    headers: {
+      'Authorization': `token ${GITHUB_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    data,
+  });
+  return response.data;
+}
+
+async function checkWriteAccess(owner, repo) {
+  if (!GITHUB_TOKEN) {
+    return { canWrite: false, reason: 'No GitHub token configured' };
+  }
+  try {
+    const data = await githubRequest(`/repos/${owner}/${repo}`);
+    if (data.permissions && data.permissions.push) {
+      return { canWrite: true, reason: 'Token has push access' };
+    }
+    return { canWrite: false, reason: 'Token does not have push access to this repository' };
+  } catch (err) {
+    if (err.response?.status === 404) {
+      return { canWrite: false, reason: 'Repository not found' };
+    }
+    if (err.response?.status === 403) {
+      return { canWrite: false, reason: 'Token lacks sufficient scope' };
+    }
+    return { canWrite: false, reason: err.message };
+  }
+}
+
+async function commitReport(owner, repo, markdownContent) {
+  const path = 'DEPSCOPE.md';
+  const endpoint = `/repos/${owner}/${repo}/contents/${path}`;
+
+  // Check if file already exists to get its SHA
+  let existingSha = null;
+  try {
+    const existing = await githubRequest(endpoint);
+    existingSha = existing.sha;
+  } catch (err) {
+    if (err.response?.status !== 404) throw err;
+    // 404 means file doesn't exist yet — that's fine
+  }
+
+  const body = {
+    message: existingSha
+      ? 'Update DEPSCOPE.md — DepScope dependency health report'
+      : 'Add DEPSCOPE.md — DepScope dependency health report',
+    content: Buffer.from(markdownContent).toString('base64'),
+  };
+  if (existingSha) body.sha = existingSha;
+
+  try {
+    const result = await githubWriteRequest(endpoint, 'PUT', body);
+    return {
+      success: true,
+      sha: result.content.sha,
+      url: result.content.html_url,
+    };
+  } catch (err) {
+    // 409 conflict — retry once with fresh SHA
+    if (err.response?.status === 409) {
+      const fresh = await githubRequest(endpoint);
+      body.sha = fresh.sha;
+      const retry = await githubWriteRequest(endpoint, 'PUT', body);
+      return {
+        success: true,
+        sha: retry.content.sha,
+        url: retry.content.html_url,
+      };
+    }
+    throw err;
+  }
+}
+
+module.exports = { analyzeRepo, checkWriteAccess, commitReport };

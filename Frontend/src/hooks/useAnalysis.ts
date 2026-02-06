@@ -62,6 +62,7 @@ export function useAnalysis() {
   const [showResults, setShowResults] = useState(false);
   const [showMainContent, setShowMainContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -76,15 +77,17 @@ export function useAnalysis() {
     setShowMainContent(false);
     setResult(null);
     setError(null);
+    setAnalysisId(null);
     setAgents(INITIAL_AGENTS.map(a => ({ ...a })));
 
     eventSourceRef.current?.close();
 
     try {
-      const { analysisId } = await startAnalysis(query);
+      const { analysisId: id } = await startAnalysis(query);
+      setAnalysisId(id);
 
       const es = connectStream(
-        analysisId,
+        id,
         (event: AgentEvent) => {
           const idx = AGENT_INDEX[event.agent];
 
@@ -106,7 +109,7 @@ export function useAnalysis() {
 
           if (event.agent === 'system' && event.status === 'complete') {
             es.close();
-            fetchResult(analysisId)
+            fetchResult(id)
               .then(async (raw) => {
                 const mapped = mapResult(raw);
                 try {
@@ -146,5 +149,5 @@ export function useAnalysis() {
     }
   }, []);
 
-  return { agents, result, isAnalyzing, showResults, showMainContent, error, analyze };
+  return { agents, result, analysisId, isAnalyzing, showResults, showMainContent, error, analyze };
 }

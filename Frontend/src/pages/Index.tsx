@@ -11,6 +11,7 @@ import FindingsList from '@/components/FindingsList';
 import AlternativesTable from '@/components/AlternativesTable';
 import PatternInsights from '@/components/PatternInsights';
 import VerdictBox from '@/components/VerdictBox';
+import ReportActions from '@/components/ReportActions';
 import { useAnalysis } from '@/hooks/useAnalysis';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,6 +20,7 @@ const Index = () => {
   const {
     agents,
     result,
+    analysisId,
     isAnalyzing,
     showResults,
     showMainContent,
@@ -163,6 +165,15 @@ const Index = () => {
                         />
                       </div>
                     </div>
+
+                    {/* Report Actions */}
+                    {analysisId && (
+                      <ReportActions
+                        analysisId={analysisId}
+                        packageName={result.packageName}
+                        grade={result.grade}
+                      />
+                    )}
 
                     {/* Pattern Insights - full width */}
                     {result.patternInsights.insights.length > 0 && (

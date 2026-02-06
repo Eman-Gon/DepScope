@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const config = require('./config');
-const { analyzeRepo } = require('./services/githubService');
+const { analyzeRepo, checkWriteAccess, commitReport } = require('./services/githubService');
+const { generateReport } = require('./services/reportService');
 const { researchPackage } = require('./services/youService');
 const { synthesizeRiskAssessment } = require('./services/geminiService');
 const { triggerVoiceAlert, sendSMS } = require('./services/plivoService');
@@ -245,6 +246,58 @@ app.get('/api/analyze/:id/result', (req, res) => {
   const analysis = analyses[req.params.id];
   if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
   return res.json(analysis);
+});
+
+// POST /api/analyze/:id/generate-report  — generate DEPSCOPE.md content
+app.post('/api/analyze/:id/generate-report', (req, res) => {
+  const analysis = analyses[req.params.id];
+  if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+  if (analysis.status !== 'complete') {
+    return res.status(400).json({ error: 'Analysis is not yet complete' });
+  }
+
+  const markdown = generateReport(analysis);
+  analysis.generatedReport = markdown;
+
+  return res.json({
+    markdown,
+    packageName: analysis.packageName,
+    grade: analysis.grade,
+  });
+});
+
+// POST /api/analyze/:id/publish-report  — commit DEPSCOPE.md to GitHub repo
+app.post('/api/analyze/:id/publish-report', async (req, res) => {
+  const analysis = analyses[req.params.id];
+  if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+  if (analysis.status !== 'complete') {
+    return res.status(400).json({ error: 'Analysis is not yet complete' });
+  }
+
+  const markdown = analysis.generatedReport || generateReport(analysis);
+
+  const ghMatch = (analysis.input || '').match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+  if (!ghMatch) {
+    return res.status(400).json({ error: 'Cannot determine GitHub repository from analysis', markdown });
+  }
+  const owner = ghMatch[1];
+  const repo = ghMatch[2].replace('.git', '');
+
+  try {
+    const access = await checkWriteAccess(owner, repo);
+    if (!access.canWrite) {
+      return res.status(403).json({ error: 'No write access to this repository', reason: access.reason, markdown });
+    }
+  } catch (err) {
+    return res.status(403).json({ error: `Cannot verify repository access: ${err.message}`, markdown });
+  }
+
+  try {
+    const result = await commitReport(owner, repo, markdown);
+    return res.json({ success: true, sha: result.sha, url: result.url, message: `DEPSCOPE.md committed to ${owner}/${repo}` });
+  } catch (err) {
+    return res.status(500).json({ error: `Failed to commit report: ${err.message}`, markdown });
+  }
 });
 
 // GET /api/patterns  — aggregated pattern insights
