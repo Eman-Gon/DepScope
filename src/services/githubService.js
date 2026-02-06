@@ -74,6 +74,11 @@ async function analyzeRepo(repoUrl) {
     const recentReleases = releases.filter(r => new Date(r.created_at) > sixMonthsAgo);
     const releaseFrequencyPerMonth = recentReleases.length / 6;
     
+    // Check for archived or deprecated status
+    const isArchived = repoData.archived === true;
+    const isDeprecated = (repoData.description || '').toLowerCase().includes('deprecated') ||
+      (repoData.topics || []).some(t => t === 'deprecated' || t === 'unmaintained');
+
     return {
       name: repoData.name,
       owner: repoData.owner.login,
@@ -95,7 +100,11 @@ async function analyzeRepo(repoUrl) {
       staleIssueCount,
       dependencyCount: 0,
       lastReleaseDate,
-      releaseFrequencyPerMonth: parseFloat(releaseFrequencyPerMonth.toFixed(2))
+      releaseFrequencyPerMonth: parseFloat(releaseFrequencyPerMonth.toFixed(2)),
+      isArchived,
+      isDeprecated,
+      topics: repoData.topics || [],
+      description: repoData.description || '',
     };
     
   } catch (error) {
