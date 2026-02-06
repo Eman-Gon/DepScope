@@ -38,8 +38,8 @@ DepScope detects F grade
   → Plivo fetches answer_url from our server (GET /api/plivo/voice-xml/:id)
   → Server returns XML with <Speak> and <GetDigits>
   → User hears the alert, presses 1 or 2
-  → Plivo POSTs to /api/plivo/handle-input/:id
-  → If 1: send SMS with report link
+  → Plivo POSTs to /api/plivo/handle-input/:id (includes the caller number in `From`)
+  → If 1: send SMS with report link to the caller number (fallback to configured alert phone)
   → If 2: dismiss
 ```
 

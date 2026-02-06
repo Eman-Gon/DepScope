@@ -20,11 +20,30 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Request logging middleware ─────────────────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  const { method, url } = req;
+  console.log(`[REQ] ${method} ${url} from ${req.ip} at ${new Date().toISOString()}`);
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[RES] ${method} ${url} -> ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
 // ─── In-memory stores ───────────────────────────────────────────────────────
 const analyses = {};          // analysisId -> result object
 const sseClients = {};        // analysisId -> [res, ...]
 const analysisHistory = [];   // for pattern aggregation
 let alertPhone = null;        // registered phone for voice alerts
+
+// ─── Version info (set at startup) ──────────────────────────────────────────
+const DEPLOY_TIME = new Date().toISOString();
+const GIT_COMMIT = (() => {
+  try { return require('child_process').execSync('git rev-parse --short HEAD', { timeout: 3000 }).toString().trim(); }
+  catch { return process.env.RENDER_GIT_COMMIT || 'unknown'; }
+})();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -319,22 +338,28 @@ app.post('/api/alert/configure', (req, res) => {
 
 // POST /api/plivo/test-call — trigger a test call to a phone number
 app.post('/api/plivo/test-call', async (req, res) => {
+  console.log('[PLIVO] test-call request:', { body: req.body });
   try {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: 'phone is required' });
     const { makeCall } = require('./services/plivoService');
     const base = getBaseUrl(req);
     const answerUrl = `${base}/api/plivo/test-voice`;
+    console.log('[PLIVO] Initiating call to', phone, 'answerUrl:', answerUrl);
     const result = await makeCall(phone, answerUrl);
+    console.log('[PLIVO] Call initiated:', result);
     res.json({ success: true, callUuid: result, answerUrl });
   } catch (err) {
+    console.error('[PLIVO] test-call error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // GET /api/plivo/test-voice — test voice XML for Plivo integration testing
 app.get('/api/plivo/test-voice', (req, res) => {
+  console.log('[PLIVO] test-voice hit — Plivo is fetching voice XML');
   const base = getBaseUrl(req);
+  console.log('[PLIVO] Using base URL for callbacks:', base);
   res.type('application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -348,14 +373,18 @@ app.get('/api/plivo/test-voice', (req, res) => {
 
 // POST /api/plivo/test-input — test DTMF handler
 app.post('/api/plivo/test-input', (req, res) => {
+  console.log('[PLIVO] test-input hit — user pressed digit:', req.body.Digits);
   const digits = req.body.Digits;
+  const targetPhone = req.body.From || alertPhone;
   res.type('application/xml');
   if (digits === '1') {
-    if (alertPhone) {
-      sendSMS(alertPhone, 'DepScope Test Report: lodash (Grade F) - prototype pollution CVE. event-stream (Grade F) - supply chain attack. Review at your dashboard.').catch(() => {});
+    if (targetPhone) {
+      sendSMS(targetPhone, 'DepScope Test Report: lodash (Grade F) - prototype pollution CVE. event-stream (Grade F) - supply chain attack. Review at your dashboard.').catch(() => {});
+    } else {
+      console.warn('[PLIVO] test-input: no phone number available for SMS');
     }
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response><Speak>Test report sent to your phone. Goodbye.</Speak></Response>`);
+<Response><Speak>${targetPhone ? 'Test report sent to your phone.' : 'No phone number available to send the report.'} Goodbye.</Speak></Response>`);
   }
   return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response><Speak>Dismissed. Plivo test complete. Goodbye.</Speak></Response>`);
@@ -401,19 +430,22 @@ app.get('/api/plivo/voice-xml/:analysisId', (req, res) => {
 // POST /api/plivo/handle-input/:analysisId  — DTMF handler
 app.post('/api/plivo/handle-input/:analysisId', (req, res) => {
   const digits = req.body.Digits;
+  const targetPhone = req.body.From || alertPhone;
   res.type('application/xml');
 
   if (digits === '1') {
     const reportUrl = `${getBaseUrl(req)}/api/analyze/${req.params.analysisId}/result`;
     // Send SMS with report link
-    if (alertPhone) {
-      sendSMS(alertPhone, `DepScope Report: ${reportUrl}`).catch(err =>
+    if (targetPhone) {
+      sendSMS(targetPhone, `DepScope Report: ${reportUrl}`).catch(err =>
         console.error('[Plivo] SMS follow-up failed:', err.message)
       );
+    } else {
+      console.warn('[Plivo] handle-input: no phone number available for SMS');
     }
     console.log(`[Plivo] User pressed 1 — sending report link for ${req.params.analysisId}`);
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response><Speak>Report link sent to your phone. Goodbye.</Speak></Response>`);
+<Response><Speak>${targetPhone ? 'Report link sent to your phone.' : 'No phone number available to send the report.'} Goodbye.</Speak></Response>`);
   }
   return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response><Speak>Dismissed. Goodbye.</Speak></Response>`);
@@ -682,18 +714,21 @@ app.get('/api/watchlist/voice-xml/:scanId', (req, res) => {
 // POST /api/watchlist/handle-input/:scanId — DTMF handler for watchlist alerts
 app.post('/api/watchlist/handle-input/:scanId', (req, res) => {
   const digits = req.body.Digits;
+  const targetPhone = req.body.From || alertPhone;
   res.type('application/xml');
 
   if (digits === '1') {
     const scans = getScanHistory();
     const scan = scans.find(s => s.id === req.params.scanId);
-    if (scan?.alertReport && alertPhone) {
-      sendSMS(alertPhone, scan.alertReport.smsText).catch(err =>
+    if (scan?.alertReport && targetPhone) {
+      sendSMS(targetPhone, scan.alertReport.smsText).catch(err =>
         console.error('[Watchlist] SMS follow-up failed:', err.message)
       );
+    } else if (!targetPhone) {
+      console.warn('[Watchlist] handle-input: no phone number available for SMS');
     }
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response><Speak>Full report sent to your phone. Goodbye.</Speak></Response>`);
+<Response><Speak>${targetPhone ? 'Full report sent to your phone.' : 'No phone number available to send the report.'} Goodbye.</Speak></Response>`);
   }
   return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response><Speak>Dismissed. Goodbye.</Speak></Response>`);
@@ -701,7 +736,7 @@ app.post('/api/watchlist/handle-input/:scanId', (req, res) => {
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => res.json({ service: 'DepScope API', status: 'ok' }));
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', version: GIT_COMMIT, deployedAt: DEPLOY_TIME }));
 
 // GET /api/composio/status — Show Composio orchestration status for demo
 app.get('/api/composio/status', async (_req, res) => {
@@ -726,10 +761,32 @@ app.get('/api/composio/status', async (_req, res) => {
   });
 });
 
+// GET /debug — show server config and env info for troubleshooting
+app.get('/debug', (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    node: process.version,
+    env: process.env.NODE_ENV || 'development',
+    baseUrl: config.BASE_URL,
+    renderExternalUrl: process.env.RENDER_EXTERNAL_URL || 'not set',
+    port: config.PORT,
+    plivoConfigured: !!(process.env.PLIVO_AUTH_ID && process.env.PLIVO_AUTH_TOKEN),
+    geminiConfigured: !!process.env.GEMINI_API_KEY,
+    youConfigured: !!process.env.YOU_API_KEY,
+    requestHost: req.headers.host,
+    requestProto: req.headers['x-forwarded-proto'] || req.protocol,
+    derivedBaseUrl: getBaseUrl(req),
+  });
+});
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 app.listen(config.PORT, async () => {
-  console.log(`DepScope API running on port ${config.PORT}`);
-  console.log(`Base URL: ${config.BASE_URL}`);
+  console.log(`[STARTUP] DepScope API running on port ${config.PORT} (commit: ${GIT_COMMIT}, deployed: ${DEPLOY_TIME})`);
+  console.log(`[STARTUP] Base URL: ${config.BASE_URL}`);
+  console.log(`[STARTUP] RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'not set'}`);
+  console.log(`[STARTUP] Node ${process.version}, ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`[STARTUP] Plivo configured: ${!!(process.env.PLIVO_AUTH_ID && process.env.PLIVO_AUTH_TOKEN)}`);
   if (process.env.COMPOSIO_API_KEY) {
     try {
       await registerAgentTools();
