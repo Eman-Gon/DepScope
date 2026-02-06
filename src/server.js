@@ -8,6 +8,10 @@ const { synthesizeRiskAssessment } = require('./services/geminiService');
 const { triggerVoiceAlert, sendSMS } = require('./services/plivoService');
 const { getCachedData, hasCachedData } = require('./services/demoCache');
 const { orchestrate, registerAgentTools } = require('./services/composioService');
+const {
+  addToWatchlist, removeFromWatchlist, getWatchlist, getScanHistory,
+  runScanCycle, startCron, stopCron, getCronStatus,
+} = require('./services/watchlistService');
 const axios = require('axios');
 
 const app = express();
@@ -479,6 +483,113 @@ async function runPipeline(analysisId, parsed) {
   broadcastSSE(analysisId, { agent: 'system', status: 'complete', progress: 'Analysis complete' });
   closeSSE(analysisId);
 }
+
+// ─── Watchlist API ───────────────────────────────────────────────────────────
+
+// GET /api/watchlist — list all watched repos
+app.get('/api/watchlist', (_req, res) => {
+  res.json({ watchlist: getWatchlist(), cron: getCronStatus() });
+});
+
+// POST /api/watchlist — add a repo to the watchlist
+app.post('/api/watchlist', async (req, res) => {
+  const { input } = req.body;
+  if (!input) return res.status(400).json({ error: 'Missing input field' });
+
+  try {
+    let parsed = await parseInput(input);
+    if (parsed.type === 'package') {
+      parsed = await resolvePackageToGitHub(parsed);
+      if (!parsed.url) {
+        return res.status(400).json({ error: `Could not resolve "${input}" to a GitHub repo` });
+      }
+    }
+    const entry = addToWatchlist(parsed.url, parsed.packageName);
+    res.json({ added: entry, watchlistSize: getWatchlist().length });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/watchlist/:id — remove a repo from the watchlist
+app.delete('/api/watchlist/:id', (req, res) => {
+  const removed = removeFromWatchlist(req.params.id);
+  if (!removed) return res.status(404).json({ error: 'Not found' });
+  res.json({ removed: true, watchlistSize: getWatchlist().length });
+});
+
+// POST /api/watchlist/scan — trigger an immediate scan cycle
+app.post('/api/watchlist/scan', async (_req, res) => {
+  if (getWatchlist().length === 0) {
+    return res.status(400).json({ error: 'Watchlist is empty' });
+  }
+  const scan = await runScanCycle(alertPhone);
+  res.json(scan);
+});
+
+// POST /api/watchlist/cron — start or stop the cron
+app.post('/api/watchlist/cron', (req, res) => {
+  const { action, intervalMinutes } = req.body;
+  if (action === 'start') {
+    if (!alertPhone) {
+      return res.status(400).json({ error: 'Configure alert phone first via POST /api/alert/configure' });
+    }
+    const ms = (intervalMinutes || 60) * 60 * 1000;
+    startCron(alertPhone, ms);
+    res.json({ message: 'Cron started', cron: getCronStatus() });
+  } else if (action === 'stop') {
+    stopCron();
+    res.json({ message: 'Cron stopped', cron: getCronStatus() });
+  } else {
+    res.status(400).json({ error: 'action must be "start" or "stop"' });
+  }
+});
+
+// GET /api/watchlist/scans — scan history
+app.get('/api/watchlist/scans', (_req, res) => {
+  res.json({ scans: getScanHistory() });
+});
+
+// GET /api/watchlist/voice-xml/:scanId — Plivo voice XML for watchlist alerts
+app.get('/api/watchlist/voice-xml/:scanId', (req, res) => {
+  const scans = getScanHistory();
+  const scan = scans.find(s => s.id === req.params.scanId);
+
+  res.type('application/xml');
+  if (!scan || !scan.alertReport) {
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response><Speak>Sorry, scan report not found.</Speak></Response>`);
+  }
+
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Speak voice="Polly.Matthew" language="en-US">${scan.alertReport.voiceScript}</Speak>
+  <GetDigits action="${config.BASE_URL}/api/watchlist/handle-input/${scan.id}"
+             method="POST" timeout="10" numDigits="1">
+    <Speak>Please press 1 or 2.</Speak>
+  </GetDigits>
+</Response>`);
+});
+
+// POST /api/watchlist/handle-input/:scanId — DTMF handler for watchlist alerts
+app.post('/api/watchlist/handle-input/:scanId', (req, res) => {
+  const digits = req.body.Digits;
+  res.type('application/xml');
+
+  if (digits === '1') {
+    const scans = getScanHistory();
+    const scan = scans.find(s => s.id === req.params.scanId);
+    if (scan?.alertReport && alertPhone) {
+      sendSMS(alertPhone, scan.alertReport.smsText).catch(err =>
+        console.error('[Watchlist] SMS follow-up failed:', err.message)
+      );
+    }
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response><Speak>Full report sent to your phone. Goodbye.</Speak></Response>`);
+  }
+  return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response><Speak>Dismissed. Goodbye.</Speak></Response>`);
+});
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => res.json({ service: 'DepScope API', status: 'ok' }));
