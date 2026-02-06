@@ -264,6 +264,21 @@ app.post('/api/alert/configure', (req, res) => {
   return res.json({ message: 'Alert phone configured', phone });
 });
 
+// POST /api/plivo/test-call — trigger a test call to a phone number
+app.post('/api/plivo/test-call', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'phone is required' });
+    const { makeCall } = require('./services/plivoService');
+    const base = getBaseUrl(req);
+    const answerUrl = `${base}/api/plivo/test-voice`;
+    const result = await makeCall(phone, answerUrl);
+    res.json({ success: true, callUuid: result, answerUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/plivo/test-voice — test voice XML for Plivo integration testing
 app.get('/api/plivo/test-voice', (req, res) => {
   const base = getBaseUrl(req);
