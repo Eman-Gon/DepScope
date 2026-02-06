@@ -4,14 +4,11 @@ Autonomous multi-agent system for open-source dependency due diligence. Analyzes
 
 ## Architecture
 
-Node.js + Express backend with three agents orchestrated via **Composio SDK** in `src/server.js`:
+Node.js + Express backend with three sequential agents orchestrated in `src/server.js`:
 
-1. **Repo Health Analyzer** (`src/services/githubService.js`) — GitHub REST API for stars, forks, commit frequency, bus factor, issue response times, license, archived/deprecated status
+1. **Repo Health Analyzer** (`src/services/githubService.js`) — GitHub REST API for stars, forks, commit frequency, bus factor, issue response times, license, dependency count
 2. **External Researcher** (`src/services/youService.js`) — You.com Search API for CVE lookups, community sentiment (Reddit/HN), and alternative package discovery
-3. **Risk Scorer** (`src/services/geminiService.js`) — Gemini AI synthesizes all data into a letter grade (A-F), severity-ranked findings, alternatives, and an opinionated verdict
-
-Orchestration:
-- `src/services/composioService.js` — Composio SDK registers 3 custom tools, runs Agents 1 & 2 in parallel, then Agent 3. Falls back to direct execution if Composio is unavailable.
+3. **Risk Scorer** (`src/services/geminiService.js`) — Gemini 2.0 Flash synthesizes all data into a letter grade (A-F), severity-ranked findings, alternatives, and an opinionated verdict
 
 Additional services:
 - `src/services/plivoService.js` — Plivo voice call + SMS alerts when CRITICAL findings are detected
@@ -24,7 +21,6 @@ src/
   config.js              # Environment variable loader (dotenv)
   server.js              # Express API server, SSE streaming, analysis pipeline, pattern aggregation
   services/
-    composioService.js   # Composio SDK: 3 custom tools, parallel orchestration
     githubService.js     # GitHub API: repo stats, commit frequency, bus factor, issues
     youService.js        # You.com Search: CVEs, sentiment, alternatives
     geminiService.js     # Gemini AI: risk synthesis, scoring, grade assignment
@@ -46,7 +42,6 @@ GET  /api/patterns                         # Aggregated insights across analyses
 POST /api/alert/configure                  # Register phone for voice alerts (body: { phone: "+1..." })
 GET  /api/plivo/voice-xml/:analysisId      # Plivo answer URL (XML for voice call)
 POST /api/plivo/handle-input/:analysisId   # Plivo DTMF handler (1=send SMS, 2=dismiss)
-GET  /api/composio/status                  # Composio orchestration status + registered tools
 GET  /                                     # Health check
 GET  /health                               # Health check
 ```
@@ -55,7 +50,7 @@ GET  /health                               # Health check
 
 ```bash
 cp .env.example .env
-# Fill in API keys: GITHUB_TOKEN, YOU_COM_API_KEY, GEMINI_API_KEY, PLIVO_AUTH_ID, PLIVO_AUTH_TOKEN, PLIVO_PHONE_NUMBER, COMPOSIO_API_KEY
+# Fill in API keys: GITHUB_TOKEN, YOU_COM_API_KEY, GEMINI_API_KEY, PLIVO_AUTH_ID, PLIVO_AUTH_TOKEN, PLIVO_PHONE_NUMBER
 npm install
 npm run dev    # nodemon with auto-reload
 npm start      # production
@@ -69,10 +64,9 @@ All loaded in `src/config.js` via dotenv. See `.env.example` for the full list. 
 
 - **CommonJS modules** (`"type": "commonjs"` in package.json) — all files use `require`/`module.exports`
 - **In-memory storage** — analyses, SSE clients, and history are stored in plain objects/arrays (no database)
-- **Composio-first orchestration** — the pipeline tries Composio custom tools first, falls back to direct Promise.allSettled if Composio is unavailable
+- **Sequential pipeline with fallback** — agents run sequentially (repo health → research → synthesis), each step falls back to `demoCache.js` if the API call fails
 - **SSE for real-time updates** — the frontend connects to `/api/analyze/:id/stream` for live agent status
 - **Retry with backoff** — `withRetry()` helper wraps each agent call (2 retries, linear backoff)
-- **Gemini model fallback** — tries gemini-2.0-flash → gemini-2.0-flash-lite → gemini-2.5-flash
 
 ## Scoring Algorithm
 
@@ -94,5 +88,8 @@ node test.js        # Test GitHub service only (needs GITHUB_TOKEN for reliabili
 node test-you.js    # Test You.com search (needs YOU_COM_API_KEY)
 node test-demo.js   # Full pipeline using cached research (needs GEMINI_API_KEY)
 node test-full.js   # Full end-to-end (needs all API keys)
-npm start           # Start server and test via curl
 ```
+
+## Outstanding Work
+
+See `thingstofix.md` for the current task list. Key items: Lovable dashboard frontend, Composio orchestration integration, Render deployment, Plivo end-to-end testing, demo video recording.

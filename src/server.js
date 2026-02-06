@@ -23,7 +23,7 @@ let alertPhone = null;        // registered phone for voice alerts
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function parseInput(input) {
+async function parseInput(input) {
   // GitHub URL
   const ghMatch = input.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
   if (ghMatch) {
@@ -184,7 +184,7 @@ app.post('/api/analyze', async (req, res) => {
   if (!input) return res.status(400).json({ error: 'Missing input field' });
 
   const analysisId = uuidv4();
-  const parsed = parseInput(input.trim());
+  const parsed = await parseInput(input.trim());
 
   analyses[analysisId] = {
     id: analysisId,
