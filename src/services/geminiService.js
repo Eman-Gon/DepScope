@@ -4,7 +4,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function synthesizeRiskAssessment(repoHealth, research) {
-  const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash'];
+  const models = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
   let lastError;
 
   for (const modelName of models) {
