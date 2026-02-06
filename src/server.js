@@ -322,13 +322,16 @@ app.get('/api/plivo/test-voice', (req, res) => {
 app.post('/api/plivo/test-input', (req, res) => {
   console.log('[PLIVO] test-input hit — user pressed digit:', req.body.Digits);
   const digits = req.body.Digits;
+  const targetPhone = req.body.From || alertPhone;
   res.type('application/xml');
   if (digits === '1') {
-    if (alertPhone) {
-      sendSMS(alertPhone, 'DepScope Test Report: lodash (Grade F) - prototype pollution CVE. event-stream (Grade F) - supply chain attack. Review at your dashboard.').catch(() => {});
+    if (targetPhone) {
+      sendSMS(targetPhone, 'DepScope Test Report: lodash (Grade F) - prototype pollution CVE. event-stream (Grade F) - supply chain attack. Review at your dashboard.').catch(() => {});
+    } else {
+      console.warn('[PLIVO] test-input: no phone number available for SMS');
     }
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response><Speak>Test report sent to your phone. Goodbye.</Speak></Response>`);
+<Response><Speak>${targetPhone ? 'Test report sent to your phone.' : 'No phone number available to send the report.'} Goodbye.</Speak></Response>`);
   }
   return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response><Speak>Dismissed. Plivo test complete. Goodbye.</Speak></Response>`);
@@ -374,19 +377,22 @@ app.get('/api/plivo/voice-xml/:analysisId', (req, res) => {
 // POST /api/plivo/handle-input/:analysisId  — DTMF handler
 app.post('/api/plivo/handle-input/:analysisId', (req, res) => {
   const digits = req.body.Digits;
+  const targetPhone = req.body.From || alertPhone;
   res.type('application/xml');
 
   if (digits === '1') {
     const reportUrl = `${getBaseUrl(req)}/api/analyze/${req.params.analysisId}/result`;
     // Send SMS with report link
-    if (alertPhone) {
-      sendSMS(alertPhone, `DepScope Report: ${reportUrl}`).catch(err =>
+    if (targetPhone) {
+      sendSMS(targetPhone, `DepScope Report: ${reportUrl}`).catch(err =>
         console.error('[Plivo] SMS follow-up failed:', err.message)
       );
+    } else {
+      console.warn('[Plivo] handle-input: no phone number available for SMS');
     }
     console.log(`[Plivo] User pressed 1 — sending report link for ${req.params.analysisId}`);
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response><Speak>Report link sent to your phone. Goodbye.</Speak></Response>`);
+<Response><Speak>${targetPhone ? 'Report link sent to your phone.' : 'No phone number available to send the report.'} Goodbye.</Speak></Response>`);
   }
   return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response><Speak>Dismissed. Goodbye.</Speak></Response>`);
@@ -655,18 +661,21 @@ app.get('/api/watchlist/voice-xml/:scanId', (req, res) => {
 // POST /api/watchlist/handle-input/:scanId — DTMF handler for watchlist alerts
 app.post('/api/watchlist/handle-input/:scanId', (req, res) => {
   const digits = req.body.Digits;
+  const targetPhone = req.body.From || alertPhone;
   res.type('application/xml');
 
   if (digits === '1') {
     const scans = getScanHistory();
     const scan = scans.find(s => s.id === req.params.scanId);
-    if (scan?.alertReport && alertPhone) {
-      sendSMS(alertPhone, scan.alertReport.smsText).catch(err =>
+    if (scan?.alertReport && targetPhone) {
+      sendSMS(targetPhone, scan.alertReport.smsText).catch(err =>
         console.error('[Watchlist] SMS follow-up failed:', err.message)
       );
+    } else if (!targetPhone) {
+      console.warn('[Watchlist] handle-input: no phone number available for SMS');
     }
     return res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response><Speak>Full report sent to your phone. Goodbye.</Speak></Response>`);
+<Response><Speak>${targetPhone ? 'Full report sent to your phone.' : 'No phone number available to send the report.'} Goodbye.</Speak></Response>`);
   }
   return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response><Speak>Dismissed. Goodbye.</Speak></Response>`);
