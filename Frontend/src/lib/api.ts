@@ -86,3 +86,68 @@ export async function publishReportApi(analysisId: string): Promise<{
   }
   return data;
 }
+
+// ─── Watchlist API ──────────────────────────────────────────────────────────
+
+export interface WatchlistEntry {
+  id: string;
+  input: string;
+  packageName: string;
+  owner?: string;
+  repo?: string;
+  addedAt: string;
+  lastGrade?: string;
+  lastScore?: number;
+  lastScanAt?: string;
+}
+
+export async function getWatchlist(): Promise<{ entries: WatchlistEntry[] }> {
+  const res = await fetch(`${API_BASE}/api/watchlist`);
+  if (!res.ok) throw new Error(`Watchlist fetch failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function addToWatchlist(input: string): Promise<WatchlistEntry> {
+  const res = await fetch(`${API_BASE}/api/watchlist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function removeFromWatchlist(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/watchlist/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Remove failed: HTTP ${res.status}`);
+}
+
+export async function triggerScan(): Promise<{ scan: any }> {
+  const res = await fetch(`${API_BASE}/api/watchlist/scan`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Scan failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function getScanHistory(): Promise<{ scans: any[] }> {
+  const res = await fetch(`${API_BASE}/api/watchlist/scans`);
+  if (!res.ok) throw new Error(`Scan history fetch failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+// ─── Alert config API ───────────────────────────────────────────────────────
+
+export async function configureAlertPhone(phone: string): Promise<{ phone: string }> {
+  const res = await fetch(`${API_BASE}/api/alert/configure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
