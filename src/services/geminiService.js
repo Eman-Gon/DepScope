@@ -4,7 +4,26 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function synthesizeRiskAssessment(repoHealth, research) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const models = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
+  let lastError;
+
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      return await _synthesize(model, repoHealth, research);
+    } catch (error) {
+      lastError = error;
+      if (error.status === 429 || error.status === 404) {
+        console.warn(`[Gemini] ${modelName} ${error.status === 429 ? 'rate limited' : 'not found'}, trying next model...`);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function _synthesize(model, repoHealth, research) {
 
   const prompt = `You are a senior software engineer evaluating an open-source dependency for production use.
 
@@ -93,6 +112,11 @@ Respond with ONLY valid JSON in this exact format:
       finalGrade = 'D';
     }
     
+    // Archived or deprecated repo → automatic F
+    if (repoHealth.isArchived || repoHealth.isDeprecated) {
+      finalGrade = 'F';
+    }
+    
     return {
       ...assessment,
       grade: finalGrade,
@@ -101,7 +125,9 @@ Respond with ONLY valid JSON in this exact format:
     
   } catch (error) {
     console.error('Gemini synthesis error:', error);
-    throw new Error(`Failed to synthesize risk assessment: ${error.message}`);
+    // Preserve the original error so status code is available for model fallback
+    error.message = `Failed to synthesize risk assessment: ${error.message}`;
+    throw error;
   }
 }
 
