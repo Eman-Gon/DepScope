@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const YOU_API_KEY = process.env.YOU_COM_API_KEY;
-const YOU_API_URL = 'https://api.ydc-index.io/search';
+const YOU_API_URL = 'https://ydc-index.io/v1/search';
 
 async function youSearch(query, numResults = 5) {
   if (!YOU_API_KEY || YOU_API_KEY.includes('your_')) {
@@ -13,14 +13,14 @@ async function youSearch(query, numResults = 5) {
     const response = await axios.get(YOU_API_URL, {
       params: {
         query: query,
-        num_web_results: numResults
+        count: numResults
       },
       headers: {
         'X-API-Key': YOU_API_KEY
       }
     });
 
-    return response.data.results || [];
+    return response.data.results?.web || [];
   } catch (error) {
     console.error('You.com search error:', error.message);
     return [];
