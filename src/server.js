@@ -27,6 +27,15 @@ let alertPhone = null;        // registered phone for voice alerts
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function getBaseUrl(req) {
+  if (config.BASE_URL && config.BASE_URL !== `http://localhost:${config.PORT}`) {
+    return config.BASE_URL;
+  }
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return `${proto}://${host}`;
+}
+
 async function parseInput(input) {
   // GitHub URL
   const ghMatch = input.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
@@ -256,12 +265,13 @@ app.post('/api/alert/configure', (req, res) => {
 });
 
 // GET /api/plivo/test-voice — test voice XML for Plivo integration testing
-app.get('/api/plivo/test-voice', (_req, res) => {
+app.get('/api/plivo/test-voice', (req, res) => {
+  const base = getBaseUrl(req);
   res.type('application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Speak voice="Polly.Matthew" language="en-US">This is a test call from DepScope dependency monitor. DepScope Alert: 2 monitored packages have received a failing grade. lodash, critical vulnerability: prototype pollution in versions before 4.17.21. event-stream, critical: supply chain attack detected in version 3.3.6. Immediate review is recommended. Press 1 to receive the full report by text. Press 2 to dismiss.</Speak>
-  <GetDigits action="${config.BASE_URL}/api/plivo/test-input"
+  <GetDigits action="${base}/api/plivo/test-input"
              method="POST" timeout="10" numDigits="1">
     <Speak>Please press 1 or 2.</Speak>
   </GetDigits>
@@ -287,6 +297,7 @@ app.post('/api/plivo/test-input', (req, res) => {
 
 // GET /api/plivo/voice-xml/:analysisId  — returns XML when Plivo connects the call
 app.get('/api/plivo/voice-xml/:analysisId', (req, res) => {
+  const base = getBaseUrl(req);
   const analysis = analyses[req.params.analysisId];
   if (!analysis) {
     res.type('application/xml');
@@ -312,7 +323,7 @@ app.get('/api/plivo/voice-xml/:analysisId', (req, res) => {
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Speak voice="Polly.Matthew" language="en-US">${speak}</Speak>
-  <GetDigits action="${config.BASE_URL}/api/plivo/handle-input/${req.params.analysisId}"
+  <GetDigits action="${base}/api/plivo/handle-input/${req.params.analysisId}"
              method="POST" timeout="10" numDigits="1">
     <Speak>Please press 1 or 2.</Speak>
   </GetDigits>
@@ -325,7 +336,7 @@ app.post('/api/plivo/handle-input/:analysisId', (req, res) => {
   res.type('application/xml');
 
   if (digits === '1') {
-    const reportUrl = `${config.BASE_URL}/api/analyze/${req.params.analysisId}/result`;
+    const reportUrl = `${getBaseUrl(req)}/api/analyze/${req.params.analysisId}/result`;
     // Send SMS with report link
     if (alertPhone) {
       sendSMS(alertPhone, `DepScope Report: ${reportUrl}`).catch(err =>
@@ -580,6 +591,7 @@ app.get('/api/watchlist/scans', (_req, res) => {
 
 // GET /api/watchlist/voice-xml/:scanId — Plivo voice XML for watchlist alerts
 app.get('/api/watchlist/voice-xml/:scanId', (req, res) => {
+  const base = getBaseUrl(req);
   const scans = getScanHistory();
   const scan = scans.find(s => s.id === req.params.scanId);
 
@@ -592,7 +604,7 @@ app.get('/api/watchlist/voice-xml/:scanId', (req, res) => {
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Speak voice="Polly.Matthew" language="en-US">${scan.alertReport.voiceScript}</Speak>
-  <GetDigits action="${config.BASE_URL}/api/watchlist/handle-input/${scan.id}"
+  <GetDigits action="${base}/api/watchlist/handle-input/${scan.id}"
              method="POST" timeout="10" numDigits="1">
     <Speak>Please press 1 or 2.</Speak>
   </GetDigits>

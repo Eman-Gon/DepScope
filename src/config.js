@@ -2,7 +2,7 @@ require('dotenv').config();
 
 module.exports = {
   PORT: process.env.PORT || 3000,
-  BASE_URL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+  BASE_URL: process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`,
 
   // API Keys
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
