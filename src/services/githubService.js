@@ -36,12 +36,17 @@ async function analyzeRepo(repoUrl) {
     const { owner, repo } = parseGithubUrl(repoUrl);
     
     const repoData = await githubRequest(`/repos/${owner}/${repo}`);
-    const contributors = await githubRequest(`/repos/${owner}/${repo}/contributors?per_page=100`);
+    let contributors = [];
+    try {
+      contributors = await githubRequest(`/repos/${owner}/${repo}/contributors?per_page=100`);
+    } catch (err) {
+      // GitHub returns 403 for repos with too many contributors (e.g. linux)
+      console.warn(`[GitHub] Contributors unavailable for ${owner}/${repo}: ${err.message}`);
+    }
     
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const maxCommits = parseInt(process.env.GITHUB_MAX_COMMITS, 10) || 100;
     const commits = await githubRequest(
-      `/repos/${owner}/${repo}/commits?since=${ninetyDaysAgo.toISOString()}&per_page=100`
+      `/repos/${owner}/${repo}/commits?per_page=${Math.min(maxCommits, 100)}`
     );
     
     const issues = await githubRequest(`/repos/${owner}/${repo}/issues?state=all&per_page=100`);
@@ -51,7 +56,15 @@ async function analyzeRepo(repoUrl) {
     const lastCommitDate = new Date(repoData.pushed_at);
     const lastCommitDaysAgo = Math.floor((now - lastCommitDate) / (1000 * 60 * 60 * 24));
     
-    const commitFrequencyPerWeek = commits.length / 13;
+    let commitFrequencyPerWeek = 0;
+    if (commits.length >= 2) {
+      const newest = new Date(commits[0].commit.committer.date);
+      const oldest = new Date(commits[commits.length - 1].commit.committer.date);
+      const weeks = Math.max((newest - oldest) / (1000 * 60 * 60 * 24 * 7), 1);
+      commitFrequencyPerWeek = commits.length / weeks;
+    } else if (commits.length === 1) {
+      commitFrequencyPerWeek = 0.1;
+    }
     
     const topContributorPct = contributors.length > 0 
       ? contributors[0].contributions / contributors.reduce((sum, c) => sum + c.contributions, 0)
