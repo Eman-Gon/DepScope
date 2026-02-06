@@ -19,7 +19,7 @@ let alertPhone = null;        // registered phone for voice alerts
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function parseInput(input) {
+async function parseInput(input) {
   // GitHub URL
   const ghMatch = input.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
   if (ghMatch) {
@@ -29,10 +29,25 @@ function parseInput(input) {
       packageName: ghMatch[2].replace('.git', ''),
     };
   }
-  // Bare package name — assume GitHub search or npm-style
+  // Bare package name — look up repo URL from npm registry
+  try {
+    const { data } = await require('axios').get(`https://registry.npmjs.org/${encodeURIComponent(input)}`);
+    const repoUrl = data.repository?.url || '';
+    const npmGhMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s\.]+)/);
+    if (npmGhMatch) {
+      return {
+        type: 'package',
+        url: `https://github.com/${npmGhMatch[1]}/${npmGhMatch[2]}`,
+        packageName: input,
+      };
+    }
+  } catch (e) {
+    console.warn(`npm registry lookup failed for "${input}", falling back to naive URL`);
+  }
+  // Fallback: guess owner == package name (works for lodash, express, etc.)
   return {
     type: 'package',
-    url: `https://github.com/${input}/${input}`,   // naive; works for lodash, express, etc.
+    url: `https://github.com/${input}/${input}`,
     packageName: input,
   };
 }
@@ -107,12 +122,12 @@ function getPatternInsights() {
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 // POST /api/analyze  — kick off analysis
-app.post('/api/analyze', (req, res) => {
+app.post('/api/analyze', async (req, res) => {
   const { input } = req.body;
   if (!input) return res.status(400).json({ error: 'Missing input field' });
 
   const analysisId = uuidv4();
-  const parsed = parseInput(input.trim());
+  const parsed = await parseInput(input.trim());
 
   analyses[analysisId] = {
     id: analysisId,
@@ -232,35 +247,37 @@ app.post('/api/plivo/handle-input/:analysisId', (req, res) => {
 async function runPipeline(analysisId, parsed) {
   const entry = analyses[analysisId];
 
-  // Agent 1: Repo Health
+  // Agent 1 & Agent 2 run in parallel
   broadcastSSE(analysisId, { agent: 'repo-health', status: 'running', progress: 'Fetching repository data from GitHub...' });
-
-  let repoHealth;
-  try {
-    repoHealth = await analyzeRepo(parsed.url);
-    entry.repoHealth = repoHealth;
-    broadcastSSE(analysisId, { agent: 'repo-health', status: 'complete', progress: `Analyzed ${repoHealth.name} — ${repoHealth.stars} stars` });
-  } catch (err) {
-    broadcastSSE(analysisId, { agent: 'repo-health', status: 'error', progress: err.message });
-    throw err;
-  }
-
-  // Agent 2: External Research (runs in parallel with agent 3 waiting)
   broadcastSSE(analysisId, { agent: 'researcher', status: 'running', progress: 'Searching CVE databases and community forums...' });
 
-  let research;
-  try {
-    research = await researchPackage(repoHealth.name);
-    entry.research = research;
-    broadcastSSE(analysisId, {
-      agent: 'researcher',
-      status: 'complete',
-      progress: `Found ${research.cves.length} CVEs, ${research.alternatives.length} alternatives`,
+  const repoHealthPromise = analyzeRepo(parsed.url)
+    .then(repoHealth => {
+      entry.repoHealth = repoHealth;
+      broadcastSSE(analysisId, { agent: 'repo-health', status: 'complete', progress: `Analyzed ${repoHealth.name} — ${repoHealth.stars} stars` });
+      return repoHealth;
+    })
+    .catch(err => {
+      broadcastSSE(analysisId, { agent: 'repo-health', status: 'error', progress: err.message });
+      throw err;
     });
-  } catch (err) {
-    broadcastSSE(analysisId, { agent: 'researcher', status: 'error', progress: err.message });
-    throw err;
-  }
+
+  const researchPromise = researchPackage(parsed.packageName)
+    .then(research => {
+      entry.research = research;
+      broadcastSSE(analysisId, {
+        agent: 'researcher',
+        status: 'complete',
+        progress: `Found ${research.cves.length} CVEs, ${research.alternatives.length} alternatives`,
+      });
+      return research;
+    })
+    .catch(err => {
+      broadcastSSE(analysisId, { agent: 'researcher', status: 'error', progress: err.message });
+      throw err;
+    });
+
+  const [repoHealth, research] = await Promise.all([repoHealthPromise, researchPromise]);
 
   // Agent 3: Risk Synthesis
   broadcastSSE(analysisId, { agent: 'risk-scorer', status: 'running', progress: 'Synthesizing risk assessment with Gemini...' });
