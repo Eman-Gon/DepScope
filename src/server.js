@@ -37,6 +37,13 @@ const sseClients = {};        // analysisId -> [res, ...]
 const analysisHistory = [];   // for pattern aggregation
 let alertPhone = null;        // registered phone for voice alerts
 
+// ─── Version info (set at startup) ──────────────────────────────────────────
+const DEPLOY_TIME = new Date().toISOString();
+const GIT_COMMIT = (() => {
+  try { return require('child_process').execSync('git rev-parse --short HEAD', { timeout: 3000 }).toString().trim(); }
+  catch { return process.env.RENDER_GIT_COMMIT || 'unknown'; }
+})();
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getBaseUrl(req) {
@@ -667,7 +674,7 @@ app.post('/api/watchlist/handle-input/:scanId', (req, res) => {
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => res.json({ service: 'DepScope API', status: 'ok' }));
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', version: GIT_COMMIT, deployedAt: DEPLOY_TIME }));
 
 // GET /api/composio/status — Show Composio orchestration status for demo
 app.get('/api/composio/status', async (_req, res) => {
@@ -713,7 +720,7 @@ app.get('/debug', (req, res) => {
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 app.listen(config.PORT, async () => {
-  console.log(`[STARTUP] DepScope API running on port ${config.PORT}`);
+  console.log(`[STARTUP] DepScope API running on port ${config.PORT} (commit: ${GIT_COMMIT}, deployed: ${DEPLOY_TIME})`);
   console.log(`[STARTUP] Base URL: ${config.BASE_URL}`);
   console.log(`[STARTUP] RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'not set'}`);
   console.log(`[STARTUP] Node ${process.version}, ENV: ${process.env.NODE_ENV || 'development'}`);
