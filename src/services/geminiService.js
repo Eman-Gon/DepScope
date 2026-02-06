@@ -260,4 +260,4 @@ Respond with ONLY valid JSON in this exact format:
   return localSynthesize(repoHealth, research);
 }
 
-module.exports = { synthesizeRiskAssessment };
+module.exports = { synthesizeRiskAssessment, localSynthesize };
