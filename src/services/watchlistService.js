@@ -18,14 +18,14 @@ const config = require('../config');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ─── In-memory watchlist DB ─────────────────────────────────────────────────
-const watchlist = [];      // { id, repoUrl, packageName, addedAt }
-const scanHistory = [];    // { id, startedAt, completedAt, results: [] }
+const watchlist = [];      // { id, repoUrl, packageName, owner, repo, addedAt, lastGrade, lastScore, lastScanAt }
+const scanHistory = [];    // { id, startedAt, completedAt, results: [], alertReport, detailedReport }
 let cronInterval = null;
 let cronIntervalMs = 60 * 60 * 1000; // default 1 hour
 
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
-function addToWatchlist(repoUrl, packageName) {
+function addToWatchlist(repoUrl, packageName, owner, repo) {
   const existing = watchlist.find(
     w => w.repoUrl === repoUrl || w.packageName === packageName
   );
@@ -35,7 +35,12 @@ function addToWatchlist(repoUrl, packageName) {
     id: uuidv4(),
     repoUrl,
     packageName,
+    owner: owner || null,
+    repo: repo || null,
     addedAt: new Date().toISOString(),
+    lastGrade: null,
+    lastScore: null,
+    lastScanAt: null,
   };
   watchlist.push(entry);
   return entry;
@@ -56,10 +61,10 @@ function getScanHistory() {
   return scanHistory.slice(-20);
 }
 
-// ─── Gemini report generation (no markdown) ─────────────────────────────────
+// ─── Gemini report generation ───────────────────────────────────────────────
 
 async function generateAlertReport(failedRepos) {
-  const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+  const models = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
   const summary = failedRepos.map(r => {
     const findings = (r.findings || [])
       .map(f => `${f.severity}: ${f.title} - ${f.detail}`)
@@ -75,10 +80,10 @@ SCAN RESULTS:
 ${summary}
 
 OUTPUT 1 - VOICE SCRIPT:
-Write a short spoken alert (under 30 seconds when read aloud) suitable for a phone call. Be direct and urgent. Name each failing package and the most critical issue. End with "Press 1 to receive the full report by text. Press 2 to dismiss."
+Write a short spoken alert (under 30 seconds when read aloud) suitable for a phone call via text to speech. Be direct and urgent. Name each failing package and the most critical issue. No markdown, no special characters, no formatting. Just plain spoken English sentences. End with "Press 1 to receive the full report by text. Press 2 to dismiss."
 
 OUTPUT 2 - SMS TEXT:
-Write a concise SMS message (under 300 characters) summarizing the failing packages and their worst issues. No markdown, no formatting, plain text only. Include a note that detailed reports are available at the API.
+Write a concise SMS message (under 300 characters) summarizing the failing packages and their worst issues. No markdown, no formatting, plain text only.
 
 Respond with ONLY valid JSON in this format:
 {
@@ -107,9 +112,44 @@ Respond with ONLY valid JSON in this format:
   };
 }
 
+async function generateDetailedReport(scanResults) {
+  const models = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
+  const summary = scanResults.map(r => {
+    const findings = (r.findings || [])
+      .map(f => `[${f.severity}] ${f.title}: ${f.detail}. Recommendation: ${f.recommendation || 'N/A'}`)
+      .join('\n');
+    return `Package: ${r.packageName}\nGrade: ${r.grade}\nScore: ${r.weightedScore || 'N/A'}\nVerdict: ${r.verdict || 'N/A'}\nFindings:\n${findings}`;
+  }).join('\n\n---\n\n');
+
+  const prompt = `You are DepScope, an automated dependency security monitor. A user pressed 1 on their phone to receive a detailed report via SMS.
+
+Write a thorough but SMS-friendly report for the following scan results. NO markdown, NO formatting characters, NO asterisks, NO bullet points. Use plain text with line breaks. Keep it under 1500 characters (SMS limit). Be specific about each vulnerability, what version is affected, and what action to take.
+
+SCAN RESULTS:
+${summary}
+
+Respond with ONLY the plain text report, nothing else.`;
+
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      return result.response.text().trim();
+    } catch (err) {
+      if (err.status === 429 || err.status === 404) continue;
+      throw err;
+    }
+  }
+
+  // Fallback
+  return scanResults.map(r =>
+    `${r.packageName}: Grade ${r.grade}. ${(r.findings || []).map(f => `${f.severity} - ${f.title}`).join('. ')}`
+  ).join('\n\n');
+}
+
 // ─── Scan cycle ─────────────────────────────────────────────────────────────
 
-async function runScanCycle(alertPhone) {
+async function runScanCycle(alertPhone, onProgress) {
   if (watchlist.length === 0) {
     console.log('[Watchlist] No repos to scan');
     return null;
@@ -120,13 +160,19 @@ async function runScanCycle(alertPhone) {
     startedAt: new Date().toISOString(),
     completedAt: null,
     results: [],
+    alertReport: null,
+    detailedReport: null,
+    alertTriggered: false,
   };
 
   console.log(`[Watchlist] Starting scan of ${watchlist.length} repos...`);
+  if (onProgress) onProgress('started', `Scanning ${watchlist.length} packages...`);
 
-  for (const entry of watchlist) {
+  for (let i = 0; i < watchlist.length; i++) {
+    const entry = watchlist[i];
+    if (onProgress) onProgress('scanning', `Analyzing ${entry.packageName} (${i + 1}/${watchlist.length})...`);
+
     try {
-      // Run the pipeline for each watched repo
       const repoHealth = await analyzeRepo(entry.repoUrl);
 
       let research;
@@ -145,7 +191,7 @@ async function runScanCycle(alertPhone) {
         assessment = cached?.assessment || { grade: 'C', findings: [], weightedScore: 50, verdict: 'Unable to assess' };
       }
 
-      scan.results.push({
+      const result = {
         watchlistId: entry.id,
         packageName: entry.packageName,
         repoUrl: entry.repoUrl,
@@ -154,9 +200,16 @@ async function runScanCycle(alertPhone) {
         findings: assessment.findings,
         verdict: assessment.verdict,
         scannedAt: new Date().toISOString(),
-      });
+      };
+      scan.results.push(result);
+
+      // Update the watchlist entry with latest results
+      entry.lastGrade = assessment.grade;
+      entry.lastScore = assessment.weightedScore;
+      entry.lastScanAt = result.scannedAt;
 
       console.log(`[Watchlist] ${entry.packageName}: Grade ${assessment.grade}`);
+      if (onProgress) onProgress('scanned', `${entry.packageName}: Grade ${assessment.grade}`);
     } catch (err) {
       console.error(`[Watchlist] Failed to scan ${entry.packageName}: ${err.message}`);
       scan.results.push({
@@ -167,6 +220,7 @@ async function runScanCycle(alertPhone) {
         error: err.message,
         scannedAt: new Date().toISOString(),
       });
+      if (onProgress) onProgress('error', `${entry.packageName}: ${err.message}`);
     }
   }
 
@@ -176,28 +230,34 @@ async function runScanCycle(alertPhone) {
   // Check for F grades
   const failedRepos = scan.results.filter(r => r.grade === 'F');
 
-  if (failedRepos.length > 0 && alertPhone) {
+  if (failedRepos.length > 0) {
     console.log(`[Watchlist] ${failedRepos.length} repos with F grade — generating alert`);
+    if (onProgress) onProgress('alerting', `${failedRepos.length} failing — generating alert report...`);
 
     try {
       const report = await generateAlertReport(failedRepos);
-
-      // Store the report so the voice-xml endpoint can read it
       scan.alertReport = report;
 
-      // Make the Plivo voice call
-      const answerUrl = `${config.BASE_URL}/api/watchlist/voice-xml/${scan.id}`;
-      await makeCall(alertPhone, answerUrl);
+      // Pre-generate the detailed report for press-1
+      const detailed = await generateDetailedReport(scan.results);
+      scan.detailedReport = detailed;
 
-      // Also send the SMS immediately
-      await sendSMS(alertPhone, report.smsText);
-
-      console.log(`[Watchlist] Alert sent for scan ${scan.id}`);
+      if (alertPhone) {
+        const answerUrl = `${config.BASE_URL}/api/watchlist/voice-xml/${scan.id}`;
+        await makeCall(alertPhone, answerUrl);
+        scan.alertTriggered = true;
+        console.log(`[Watchlist] Voice alert sent for scan ${scan.id}`);
+        if (onProgress) onProgress('alerted', 'Voice alert sent to your phone');
+      } else {
+        console.log(`[Watchlist] F grades found but no alert phone configured`);
+        if (onProgress) onProgress('warning', 'F grades found but no alert phone configured');
+      }
     } catch (err) {
       console.error(`[Watchlist] Alert failed: ${err.message}`);
+      if (onProgress) onProgress('alert-error', `Alert failed: ${err.message}`);
     }
-  } else if (failedRepos.length > 0) {
-    console.log(`[Watchlist] ${failedRepos.length} repos with F grade but no alert phone configured`);
+  } else {
+    if (onProgress) onProgress('complete', `All ${scan.results.length} packages healthy`);
   }
 
   return scan;
@@ -210,7 +270,6 @@ function startCron(alertPhone, intervalMs) {
   if (intervalMs) cronIntervalMs = intervalMs;
   console.log(`[Watchlist] Cron started — scanning every ${cronIntervalMs / 1000}s`);
   cronInterval = setInterval(() => runScanCycle(alertPhone), cronIntervalMs);
-  // Run immediately on start
   runScanCycle(alertPhone);
 }
 
@@ -241,4 +300,5 @@ module.exports = {
   stopCron,
   getCronStatus,
   generateAlertReport,
+  generateDetailedReport,
 };

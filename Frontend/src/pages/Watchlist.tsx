@@ -32,6 +32,7 @@ const Watchlist = () => {
   const [scans, setScans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState('');
   const [addInput, setAddInput] = useState('');
   const [adding, setAdding] = useState(false);
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
@@ -81,19 +82,26 @@ const Watchlist = () => {
 
   const handleScan = async () => {
     setScanning(true);
+    setScanStatus('Starting scan...');
     try {
       const { scan } = await triggerScan();
       const failed = scan.results?.filter((r: any) => r.grade === 'F') || [];
       if (failed.length > 0) {
-        toast({ title: `Scan complete — ${failed.length} failing`, description: 'Voice alert will be triggered if phone is configured.', variant: 'destructive' });
+        const failNames = failed.map((r: any) => r.packageName).join(', ');
+        toast({
+          title: `🚨 ${failed.length} package${failed.length > 1 ? 's' : ''} failing`,
+          description: `${failNames} received grade F.${scan.alertTriggered ? ' Voice alert sent to your phone!' : phoneConfigured ? '' : ' Set alert phone to receive voice calls.'}`,
+          variant: 'destructive',
+        });
       } else {
-        toast({ title: 'Scan complete', description: `All ${scan.results?.length || 0} packages healthy.` });
+        toast({ title: '✅ All clear', description: `All ${scan.results?.length || 0} packages are healthy.` });
       }
       await refresh();
     } catch (err: any) {
       toast({ title: 'Scan failed', description: err.message, variant: 'destructive' });
     } finally {
       setScanning(false);
+      setScanStatus('');
     }
   };
 
@@ -167,6 +175,22 @@ const Watchlist = () => {
               Add
             </Button>
           </form>
+
+          {/* Scan progress banner */}
+          {scanning && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-8 p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center gap-3"
+            >
+              <Loader2 className="w-5 h-5 text-primary animate-spin flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Scanning watchlist...</p>
+                <p className="text-xs text-muted-foreground">{scanStatus || 'Analyzing packages — this may take a minute per package.'}</p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Loading */}
           {loading && (
