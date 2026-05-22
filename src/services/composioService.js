@@ -9,6 +9,7 @@
 
 const { Composio } = require('@composio/core');
 const z = require('zod');
+const config = require('../config');
 const { analyzeRepo } = require('./githubService');
 const { researchPackage } = require('./researchService');
 const { synthesizeRiskAssessment } = require('./geminiService');
@@ -18,7 +19,7 @@ let toolsRegistered = false;
 
 function getComposio() {
   if (!composio) {
-    const apiKey = process.env.COMPOSIO_API_KEY;
+    const apiKey = config.COMPOSIO_API_KEY;
     if (!apiKey) throw new Error('COMPOSIO_API_KEY not set');
     composio = new Composio({ apiKey });
   }

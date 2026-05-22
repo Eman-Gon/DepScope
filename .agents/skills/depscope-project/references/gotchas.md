@@ -8,6 +8,7 @@ Prefer code first, then this skill, then older root docs. Some repo docs describ
 
 - `src/services/composioService.js` stringifies repo health and research into `repoHealthJson` and `researchJson` before Agent 3. That workaround is intentional; do not simplify it without re-testing the Composio flow.
 - `/debug` reports remaining integration status from `src/routes/statusRoutes.js`; Tavily uses `TAVILY_API_KEY`, while OSV.dev, GitHub public advisories, and npm registry do not require separate keys.
+- Read provider secrets through `src/config.js`, not `process.env` directly. Production platforms pass env values literally, so `config.js` trims whitespace and matching wrapper quotes before services use keys.
 - `src/services/githubService.js` still uses placeholder-style values for `avgIssueResponseHours` and `dependencyCount`. Treat those as known gaps, not finished metrics.
 - Tavily is contextual web research, not the source of truth for security. OSV.dev and GitHub Security Advisories should drive vulnerability findings.
 

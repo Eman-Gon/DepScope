@@ -10,7 +10,7 @@ router.get('/health', (_req, res) => {
 });
 
 router.get('/api/composio/status', async (_req, res) => {
-  const hasKey = !!process.env.COMPOSIO_API_KEY;
+  const hasKey = config.has.composio;
   const tools = ['DEPSCOPE_REPO_HEALTH', 'DEPSCOPE_RESEARCH', 'DEPSCOPE_RISK_SYNTHESIS'];
   const recentAnalyses = analysisHistory.slice(-10).map(analysis => ({
     package: analysis.repoHealth?.name,
@@ -40,14 +40,15 @@ router.get('/debug', (req, res) => {
     baseUrl: config.BASE_URL,
     renderExternalUrl: process.env.RENDER_EXTERNAL_URL || 'not set',
     port: config.PORT,
-    geminiConfigured: !!process.env.GEMINI_API_KEY,
-    githubConfigured: !!process.env.GITHUB_TOKEN,
-    tavilyConfigured: !!process.env.TAVILY_API_KEY,
+    geminiConfigured: config.has.gemini,
+    githubConfigured: config.has.github,
+    tavilyConfigured: config.has.tavily,
+    configWarnings: config.CONFIG_WARNINGS,
     researchSources: {
       npmRegistry: true,
       osv: true,
       githubAdvisory: true,
-      tavily: !!process.env.TAVILY_API_KEY,
+      tavily: config.has.tavily,
     },
     requestHost: req.headers.host,
     requestProto: req.headers['x-forwarded-proto'] || req.protocol,

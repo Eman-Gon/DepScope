@@ -1,7 +1,8 @@
 const axios = require('axios');
+const config = require('../config');
 
 const GITHUB_API = 'https://api.github.com';
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_TOKEN = config.GITHUB_TOKEN;
 
 function parseGithubUrl(url) {
   const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
@@ -44,7 +45,7 @@ async function analyzeRepo(repoUrl) {
       console.warn(`[GitHub] Contributors unavailable for ${owner}/${repo}: ${err.message}`);
     }
     
-    const maxCommits = parseInt(process.env.GITHUB_MAX_COMMITS, 10) || 100;
+    const maxCommits = config.GITHUB_MAX_COMMITS;
     const commits = await githubRequest(
       `/repos/${owner}/${repo}/commits?per_page=${Math.min(maxCommits, 100)}`
     );

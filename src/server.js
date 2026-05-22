@@ -11,9 +11,10 @@ async function start() {
     console.log(`[STARTUP] Base URL: ${config.BASE_URL}`);
     console.log(`[STARTUP] RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'not set'}`);
     console.log(`[STARTUP] Node ${process.version}, ENV: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[STARTUP] Tavily configured: ${!!process.env.TAVILY_API_KEY}`);
+    config.CONFIG_WARNINGS.forEach(warning => console.warn(`[CONFIG] ${warning}`));
+    console.log(`[STARTUP] Tavily configured: ${config.has.tavily}`);
 
-    if (process.env.COMPOSIO_API_KEY) {
+    if (config.has.composio) {
       try {
         await registerAgentTools();
         console.log('Composio orchestration: enabled');

@@ -24,3 +24,5 @@ You.com search has been replaced by the research stack above.
 Run `npm run test:integrations` to check npm, OSV.dev, GitHub REST, GitHub Security Advisories, Tavily, Gemini, Composio, and the local backend health endpoint.
 
 Optional integrations without configured keys are reported as `SKIP` by default. Use `npm run test:integrations -- --strict` to fail missing optional keys in CI or deployment validation.
+
+Production platforms pass environment variable values literally. If a secret is saved with wrapper quotes in Render or Vercel, the app normalizes the value by trimming whitespace and removing matching surrounding single or double quotes before using it.

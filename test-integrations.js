@@ -1,6 +1,5 @@
-require('dotenv').config();
-
 const axios = require('axios');
+const config = require('./src/config');
 
 const OSV_API = 'https://api.osv.dev/v1/querybatch';
 const GITHUB_API = 'https://api.github.com';
@@ -31,8 +30,12 @@ const secretEnvNames = [
 class SkipError extends Error {}
 
 function isConfigured(name) {
-  const value = process.env[name];
-  return Boolean(value && value.trim() && !value.includes('your_'));
+  const key = name.replace(/_API_KEY$/, '').replace(/_TOKEN$/, '').toLowerCase();
+  return config.has[key] || Boolean(config[name] && !config[name].includes('your_'));
+}
+
+function secretValues(name) {
+  return [process.env[name], config[name]].filter(Boolean);
 }
 
 function sanitize(value) {
@@ -40,10 +43,11 @@ function sanitize(value) {
   if (!text) return '';
 
   secretEnvNames.forEach(name => {
-    const secret = process.env[name];
-    if (secret && secret.length >= 6) {
-      text = text.split(secret).join(`<redacted:${name}>`);
-    }
+    secretValues(name).forEach(secret => {
+      if (secret.length >= 6) {
+        text = text.split(secret).join(`<redacted:${name}>`);
+      }
+    });
   });
 
   return text.replace(/AIza[0-9A-Za-z_-]{20,}/g, '<redacted:google-api-key>');
@@ -115,7 +119,7 @@ function githubHeaders() {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   };
-  if (isConfigured('GITHUB_TOKEN')) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (isConfigured('GITHUB_TOKEN')) headers.Authorization = `Bearer ${config.GITHUB_TOKEN}`;
   return headers;
 }
 
@@ -191,7 +195,7 @@ async function checkTavily() {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.TAVILY_API_KEY}`,
+          Authorization: `Bearer ${config.TAVILY_API_KEY}`,
           'Content-Type': 'application/json',
         },
         timeout,
@@ -224,7 +228,7 @@ async function checkGemini() {
             }],
           },
           {
-            params: { key: process.env.GEMINI_API_KEY },
+            params: { key: config.GEMINI_API_KEY },
             timeout,
           }
         )
@@ -243,7 +247,7 @@ async function checkGemini() {
 async function checkComposio() {
   const response = await withRetry(() =>
     axios.get(COMPOSIO_API, {
-      headers: { 'x-api-key': process.env.COMPOSIO_API_KEY },
+      headers: { 'x-api-key': config.COMPOSIO_API_KEY },
       params: { limit: 1 },
       timeout,
     })

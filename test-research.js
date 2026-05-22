@@ -4,6 +4,11 @@ const {
   normalizeGithubAdvisory,
   extractAlternativesFromResults,
 } = require('./src/services/researchService');
+const { cleanEnvValue } = require('./src/config');
+
+process.env.DEPSCOPE_TEST_SECRET = ' "quoted-secret" ';
+assert.equal(cleanEnvValue('DEPSCOPE_TEST_SECRET'), 'quoted-secret');
+delete process.env.DEPSCOPE_TEST_SECRET;
 
 const osv = normalizeOsvAdvisory({
   id: 'GHSA-test-1234-5678',

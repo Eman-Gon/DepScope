@@ -6,12 +6,13 @@ const { orchestrate } = require('../services/composioService');
 const { analyses, analysisHistory } = require('../state');
 const { broadcastSSE, closeSSE } = require('../realtime/sse');
 const { withRetry } = require('../lib/retry');
+const config = require('../config');
 
 async function runPipeline(analysisId, parsed) {
   const entry = analyses[analysisId];
   const packageName = parsed.packageName;
   const cached = getCachedData(packageName);
-  const useComposio = !!process.env.COMPOSIO_API_KEY;
+  const useComposio = config.has.composio;
 
   if (useComposio) {
     try {
