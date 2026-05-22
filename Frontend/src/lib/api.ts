@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export async function startAnalysis(input: string): Promise<{ analysisId: string }> {
   const res = await fetch(`${API_BASE}/api/analyze`, {
@@ -111,6 +111,26 @@ export interface WatchlistEntry {
   lastScanAt?: string;
 }
 
+export interface WatchlistScanResult {
+  watchlistId: string;
+  packageName: string;
+  repoUrl: string;
+  grade: string;
+  weightedScore?: number;
+  findings?: unknown[];
+  verdict?: string;
+  error?: string;
+  scannedAt: string;
+}
+
+export interface WatchlistScan {
+  id: string;
+  startedAt: string;
+  completedAt?: string | null;
+  results: WatchlistScanResult[];
+  failedCount?: number;
+}
+
 export async function getWatchlist(): Promise<{ entries: WatchlistEntry[] }> {
   const res = await fetch(`${API_BASE}/api/watchlist`);
   if (!res.ok) throw new Error(`Watchlist fetch failed: HTTP ${res.status}`);
@@ -135,29 +155,14 @@ export async function removeFromWatchlist(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Remove failed: HTTP ${res.status}`);
 }
 
-export async function triggerScan(): Promise<{ scan: any }> {
+export async function triggerScan(): Promise<{ scan: WatchlistScan }> {
   const res = await fetch(`${API_BASE}/api/watchlist/scan`, { method: 'POST' });
   if (!res.ok) throw new Error(`Scan failed: HTTP ${res.status}`);
   return res.json();
 }
 
-export async function getScanHistory(): Promise<{ scans: any[] }> {
+export async function getScanHistory(): Promise<{ scans: WatchlistScan[] }> {
   const res = await fetch(`${API_BASE}/api/watchlist/scans`);
   if (!res.ok) throw new Error(`Scan history fetch failed: HTTP ${res.status}`);
-  return res.json();
-}
-
-// ─── Alert config API ───────────────────────────────────────────────────────
-
-export async function configureAlertPhone(phone: string): Promise<{ phone: string }> {
-  const res = await fetch(`${API_BASE}/api/alert/configure`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
   return res.json();
 }

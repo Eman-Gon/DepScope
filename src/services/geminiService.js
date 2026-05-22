@@ -35,11 +35,22 @@ ${JSON.stringify(repoHealth, null, 2)}
 ## Security Research
 ${JSON.stringify(research.cves, null, 2)}
 
+## Authoritative Advisories
+These are structured vulnerability records from OSV.dev and GitHub Security Advisories. Treat these as the source of truth for CVEs, affected ranges, patched versions, and severity.
+${JSON.stringify(research.authoritativeAdvisories || research.advisories || [], null, 2)}
+
 ## Community Sentiment
 ${JSON.stringify(research.sentiment, null, 2)}
 
 ## Alternatives Found
 ${JSON.stringify(research.alternatives, null, 2)}
+
+## Package Metadata
+${JSON.stringify(research.packageMetadata || {}, null, 2)}
+
+## Web Context
+This is Tavily search context for sentiment, alternatives, and supplemental security evidence. Use it for color and discovery, but do not let it override authoritative advisory data.
+${JSON.stringify(research.webContext || {}, null, 2)}
 
 Respond with ONLY valid JSON in this exact format:
 {

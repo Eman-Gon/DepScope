@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { analyzeRepo } = require('./src/services/githubService');
 
-// Hardcoded demo data — bypass You.com and Gemini until keys work
+// Hardcoded demo data — bypass live research sources and Gemini until keys work
 const MOCK_RESEARCH = {
   cves: [
     {
@@ -128,4 +128,7 @@ async function testWithMockData(repoUrl) {
 }
 
 testWithMockData('https://github.com/lodash/lodash')
-  .catch(err => console.error('Error:', err.message));
+  .catch(err => {
+    console.error('Error:', err.message);
+    process.exitCode = 1;
+  });

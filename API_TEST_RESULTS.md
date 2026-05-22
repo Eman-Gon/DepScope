@@ -54,7 +54,7 @@
 - **SDK:** `@composio/core` v0.6.3
 - **3 custom tools registered:**
   - `DEPSCOPE_REPO_HEALTH` — wraps githubService.analyzeRepo()
-  - `DEPSCOPE_RESEARCH` — wraps youService.researchPackage()
+  - `DEPSCOPE_RESEARCH` — wraps researchService.researchPackage()
   - `DEPSCOPE_RISK_SYNTHESIS` — wraps geminiService.synthesizeRiskAssessment()
 - **Execution:** Agents 1 & 2 run in parallel via Composio, Agent 3 runs after
 - **Fallback:** If Composio fails, falls back to direct Promise.allSettled execution

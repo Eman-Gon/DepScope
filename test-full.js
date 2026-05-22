@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { analyzeRepo } = require('./src/services/githubService');
-const { researchPackage } = require('./src/services/youService');
+const { researchPackage } = require('./src/services/researchService');
 const { synthesizeRiskAssessment } = require('./src/services/geminiService');
 
 async function testFullAnalysis(repoUrl) {
@@ -23,4 +23,7 @@ async function testFullAnalysis(repoUrl) {
 }
 
 testFullAnalysis('https://github.com/lodash/lodash')
-  .catch(err => console.error('Error:', err.message));
+  .catch(err => {
+    console.error('Error:', err.message);
+    process.exitCode = 1;
+  });

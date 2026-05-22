@@ -10,8 +10,8 @@
 ### `src/services/composioService.js` (152 lines)
 Composio SDK orchestration layer. Registers 3 custom tools with Composio (`DEPSCOPE_REPO_HEALTH`, `DEPSCOPE_RESEARCH`, `DEPSCOPE_RISK_SYNTHESIS`) and provides an `orchestrate()` function that runs Agents 1 & 2 in parallel, then Agent 3. Includes cached assessment fallback if Gemini fails.
 
-### `src/services/plivoService.js` (73 lines)
-Plivo REST API integration using axios (not the plivo npm package). Provides `makeCall()`, `sendSMS()`, and `triggerVoiceAlert()` functions. Uses HTTP Basic Auth with Plivo credentials.
+### `src/services/researchService.js`
+Current research layer replacing the old generic search service. Combines OSV.dev, GitHub Security Advisories, npm registry metadata, and Tavily web context.
 
 ### `src/services/demoCache.js` (141 lines)
 Pre-cached analysis results for lodash, moment, and express. Used as fallback when APIs are unavailable. Each cache entry includes repoHealth, research (cves, sentiment, alternatives), and assessment (grade, scores, findings, verdict).
@@ -29,10 +29,10 @@ Line-by-line comparison of the hackathon spec vs implementation. Lists what's do
 ### `src/server.js`
 **Major changes:**
 - **Composio-first pipeline:** `runPipeline()` tries Composio orchestration first, falls back to direct `Promise.allSettled` execution if Composio fails
-- **Parallel agents:** Agents 1 (GitHub) and 2 (You.com) now run concurrently instead of sequentially
+- **Parallel agents:** Agents 1 (GitHub) and 2 (external research) run concurrently instead of sequentially
 - **Smart input parsing:** `parseInput()` handles GitHub URLs, owner/repo format, and bare npm package names. `resolvePackageToGitHub()` queries npm registry to find the GitHub repo URL.
 - **Composio status endpoint:** `GET /api/composio/status` returns registered tools, orchestration mode, and recent analyses
-- **Plivo integration:** Voice XML endpoint, DTMF handler, alert phone configuration, automatic CRITICAL alert triggering
+- **Watchlist scan history:** Watchlist failures surface through dashboard/API scan history
 - **Pattern aggregation:** `getPatternInsights()` computes riskFactors and safestCategories across all analyses
 - **`orchestration` field:** Each analysis result includes whether it used `composio`, `direct`, or `direct-cached` execution
 - **Error handling:** `withRetry()` helper with configurable retries and linear backoff
@@ -48,10 +48,10 @@ Line-by-line comparison of the hackathon spec vs implementation. Lists what's do
 - Added `isArchived`, `isDeprecated`, `topics`, `description` fields to repo health output
 - Deprecated detection checks repo description for "deprecated" keyword and topics for "deprecated"/"unmaintained"
 
-### `src/services/youService.js`
-- **`getResultText()` helper:** Concatenates title, description, and snippets array from You.com results for more comprehensive text parsing
-- **Improved sentiment query:** Added more keywords (community, developer experience, complaints, praise, quality)
-- **Rebuilt alternatives extraction:** Added `looksLikePackageName()` filter with minimum length (3), capitalized-word rejection, and comprehensive stop-word list (~80 words) to filter out English words that aren't package names
+### `src/services/researchService.js`
+- **Structured vulnerability sources:** OSV.dev and GitHub Security Advisories provide authoritative advisory data.
+- **Contextual web research:** Tavily powers sentiment, alternatives, and supplemental security context.
+- **npm metadata:** Package deprecation, latest version, maintainers, dist-tags, and repository URL are included in research payloads.
 
 ### `package.json`
 - Added `@composio/core` as dependency

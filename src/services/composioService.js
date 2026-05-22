@@ -3,14 +3,14 @@
  * 
  * Registers 3 agent tools with Composio and orchestrates them:
  *   1. DEPSCOPE_REPO_HEALTH   — GitHub repo analysis (Agent 1)
- *   2. DEPSCOPE_RESEARCH      — You.com CVE/sentiment research (Agent 2)
+ *   2. DEPSCOPE_RESEARCH      — OSV/GitHub/Tavily/npm research (Agent 2)
  *   3. DEPSCOPE_RISK_SYNTHESIS — Gemini risk assessment (Agent 3)
  */
 
 const { Composio } = require('@composio/core');
 const z = require('zod');
 const { analyzeRepo } = require('./githubService');
-const { researchPackage } = require('./youService');
+const { researchPackage } = require('./researchService');
 const { synthesizeRiskAssessment } = require('./geminiService');
 
 let composio = null;
@@ -46,7 +46,7 @@ async function registerAgentTools() {
   // Agent 2: External Researcher
   await c.tools.createCustomTool({
     name: 'DepScope External Researcher',
-    description: 'Researches a package using You.com API for CVEs, community sentiment, and alternative libraries.',
+    description: 'Researches a package using OSV.dev, GitHub Security Advisories, npm metadata, and Tavily web context.',
     slug: 'DEPSCOPE_RESEARCH',
     inputParams: z.object({
       packageName: z.string().describe('npm package name (e.g. lodash)'),
@@ -94,7 +94,7 @@ async function orchestrate(repoUrl, packageName, onProgress = () => {}, cachedAs
 
   // Phase 1: Execute Agents 1 & 2 in parallel via Composio
   onProgress('repo-health', 'running', 'Fetching repository data from GitHub...');
-  onProgress('researcher', 'running', 'Searching CVE databases and community forums...');
+  onProgress('researcher', 'running', 'Checking OSV.dev, GitHub advisories, npm metadata, and web context...');
 
   const [repoResult, researchResult] = await Promise.allSettled([
     c.tools.execute('DEPSCOPE_REPO_HEALTH', {
@@ -121,7 +121,7 @@ async function orchestrate(repoUrl, packageName, onProgress = () => {}, cachedAs
     throw err;
   }
   const research = researchResult.value.data;
-  onProgress('researcher', 'complete', `Found ${research.cves.length} CVEs, ${research.alternatives.length} alternatives`);
+  onProgress('researcher', 'complete', `Found ${(research.cves || []).length} advisories, ${(research.alternatives || []).length} alternatives`);
 
   // Phase 2: Execute Agent 3 (depends on Agents 1 & 2)
   onProgress('risk-scorer', 'running', 'Synthesizing risk assessment with Gemini...');

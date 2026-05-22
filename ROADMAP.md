@@ -4,15 +4,15 @@
 
 ## Current State
 
-DepScope analyzes npm packages through a 3-agent pipeline (GitHub health, web research, AI synthesis) and produces letter-graded risk reports with actionable findings. The backend API, Composio orchestration, Plivo voice alerts, and React frontend are built. The system works end-to-end locally.
+DepScope analyzes npm packages through a 3-agent pipeline (GitHub health, structured research, AI synthesis) and produces letter-graded risk reports with actionable findings. The backend API, Composio orchestration, Render container deployment path, and React frontend are built.
 
 ---
 
 ## Phase 1 — Ship It (Immediate)
 
-- [ ] **Deploy backend to Render** — set all env vars, verify endpoints work at public URL
-- [ ] **Connect frontend to live API** — replace mock data with real `fetch()` calls and SSE streaming
-- [ ] **End-to-end Plivo test** — trigger a CRITICAL-grade analysis and verify voice call + SMS delivery
+- [ ] **Deploy single container to Render** — set env vars, verify frontend/API share one public URL
+- [x] **Connect frontend to live API** — real `fetch()` calls and SSE streaming are wired
+- [x] **Remove phone alerts** — watchlist failures are reported in dashboard/API scan history
 - [ ] **Fix GitHub data gaps** — compute real `avgIssueResponseHours` from issue comments, parse `dependencyCount` from package.json, check `hasLockFile`
 
 ## Phase 2 — Make It Useful
@@ -20,8 +20,8 @@ DepScope analyzes npm packages through a 3-agent pipeline (GitHub health, web re
 - [ ] **CLI tool** — `npx depscope lodash` for terminal-first users; highest-leverage distribution channel
 - [ ] **Persistent storage** — PostgreSQL or MongoDB to survive restarts; enables historical grade tracking and user accounts
 - [ ] **Authentication & rate limiting** — API keys, basic auth, and per-IP rate limits to prevent abuse
-- [ ] **OSV.dev integration** — machine-readable CVE data instead of regex-parsing You.com search results
-- [ ] **Improve alternatives extraction** — reduce noise in You.com results; add npmjs.com download comparison
+- [x] **OSV.dev integration** — machine-readable advisory lookup replaces generic CVE search parsing
+- [ ] **Improve alternatives extraction** — reduce Tavily noise; add npmjs.com download comparison
 
 ## Phase 3 — Expand Reach
 
@@ -54,8 +54,8 @@ DepScope analyzes npm packages through a 3-agent pipeline (GitHub health, web re
 |---|---|---|
 | Orchestration | Composio (with direct-call fallback) | Parallel agent execution + graceful degradation when API key is missing |
 | AI Synthesis | Gemini 2.0 Flash | Fast, cost-effective; fallback chain to gemini-1.5-flash and pro |
-| Web Research | You.com Search API | Single API for CVEs, Reddit/HN sentiment, and alternatives |
-| Alerts | Plivo Voice + SMS | Programmable voice calls for CRITICAL findings |
+| Research | OSV.dev + GitHub Security Advisories + npm registry + Tavily | Structured security data first, contextual web research second |
+| Alerts | Dashboard/API scan history | Keeps watchlist useful without phone/SMS infrastructure |
 | Frontend | React + Vite + shadcn/ui | Component library with SSE streaming support |
 | Storage | In-memory (for now) | No database dependency during prototyping; migrate to PostgreSQL in Phase 2 |
 

@@ -1,21 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Eye, Plus, Trash2, RefreshCw, Phone, Shield, AlertTriangle,
+  Eye, Plus, Trash2, RefreshCw, Shield, AlertTriangle,
   CheckCircle, Clock, Loader2,
 } from 'lucide-react';
 import Header from '@/components/Header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   getWatchlist, addToWatchlist, removeFromWatchlist, triggerScan,
-  getScanHistory, configureAlertPhone,
+  getScanHistory,
   type WatchlistEntry,
+  type WatchlistScan,
+  type WatchlistScanResult,
 } from '@/lib/api';
 
 const gradeColor: Record<string, string> = {
@@ -26,27 +25,27 @@ const gradeColor: Record<string, string> = {
   F: 'text-red-400 bg-red-400/10 border-red-400/30',
 };
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Unknown error';
+}
+
 const Watchlist = () => {
   const { toast } = useToast();
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
-  const [scans, setScans] = useState<any[]>([]);
+  const [scans, setScans] = useState<WatchlistScan[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState('');
   const [addInput, setAddInput] = useState('');
   const [adding, setAdding] = useState(false);
-  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
-  const [phoneInput, setPhoneInput] = useState('');
-  const [phoneSaving, setPhoneSaving] = useState(false);
-  const [phoneConfigured, setPhoneConfigured] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const [wl, sh] = await Promise.all([getWatchlist(), getScanHistory()]);
       setEntries(wl.entries);
       setScans(sh.scans);
-    } catch (err: any) {
-      toast({ title: 'Error loading watchlist', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Error loading watchlist', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -63,8 +62,8 @@ const Watchlist = () => {
       setAddInput('');
       toast({ title: 'Added to watchlist' });
       await refresh();
-    } catch (err: any) {
-      toast({ title: 'Failed to add', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Failed to add', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setAdding(false);
     }
@@ -75,8 +74,8 @@ const Watchlist = () => {
       await removeFromWatchlist(id);
       toast({ title: 'Removed from watchlist' });
       await refresh();
-    } catch (err: any) {
-      toast({ title: 'Failed to remove', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Failed to remove', description: getErrorMessage(err), variant: 'destructive' });
     }
   };
 
@@ -85,42 +84,25 @@ const Watchlist = () => {
     setScanStatus('Starting scan...');
     try {
       const { scan } = await triggerScan();
-      const failed = scan.results?.filter((r: any) => r.grade === 'F') || [];
+      const failed = scan.results?.filter((result: WatchlistScanResult) => result.grade === 'F') || [];
       if (failed.length > 0) {
-        const failNames = failed.map((r: any) => r.packageName).join(', ');
+        const failNames = failed.map((result: WatchlistScanResult) => result.packageName).join(', ');
         toast({
-          title: `🚨 ${failed.length} package${failed.length > 1 ? 's' : ''} failing`,
-          description: `${failNames} received grade F.${scan.alertTriggered ? ' Voice alert sent to your phone!' : phoneConfigured ? '' : ' Set alert phone to receive voice calls.'}`,
+          title: `${failed.length} package${failed.length > 1 ? 's' : ''} failing`,
+          description: `${failNames} received grade F. Review the scan history for details.`,
           variant: 'destructive',
         });
       } else {
-        toast({ title: '✅ All clear', description: `All ${scan.results?.length || 0} packages are healthy.` });
+        toast({ title: 'All clear', description: `All ${scan.results?.length || 0} packages are healthy.` });
       }
       await refresh();
-    } catch (err: any) {
-      toast({ title: 'Scan failed', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Scan failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setScanning(false);
       setScanStatus('');
     }
   };
-
-  const handlePhoneSave = async () => {
-    if (!phoneInput.trim()) return;
-    setPhoneSaving(true);
-    try {
-      await configureAlertPhone(phoneInput.trim());
-      setPhoneConfigured(phoneInput.trim());
-      setPhoneDialogOpen(false);
-      toast({ title: 'Alert phone configured', description: `Calls will go to ${phoneInput.trim()}` });
-    } catch (err: any) {
-      toast({ title: 'Failed to configure phone', description: err.message, variant: 'destructive' });
-    } finally {
-      setPhoneSaving(false);
-    }
-  };
-
-  const latestScan = scans[0];
 
   return (
     <div className="min-h-screen bg-background">
@@ -136,19 +118,10 @@ const Watchlist = () => {
               </div>
               <div>
                 <h2 className="text-3xl font-bold text-foreground">Watchlist</h2>
-                <p className="text-sm text-muted-foreground">Monitor packages for security regressions — get a phone call when something fails.</p>
+                <p className="text-sm text-muted-foreground">Monitor packages for security regressions and review failing scans in one place.</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPhoneDialogOpen(true)}
-                className="gap-2"
-              >
-                <Phone className="w-4 h-4" />
-                {phoneConfigured ? 'Phone set ✓' : 'Set alert phone'}
-              </Button>
               <Button
                 size="sm"
                 onClick={handleScan}
@@ -263,8 +236,8 @@ const Watchlist = () => {
                 Scan History
               </h3>
               <div className="space-y-3">
-                {scans.slice(0, 10).map((scan: any) => {
-                  const failCount = scan.results?.filter((r: any) => r.grade === 'F').length || 0;
+                {scans.slice(0, 10).map((scan: WatchlistScan) => {
+                  const failCount = scan.results?.filter((result: WatchlistScanResult) => result.grade === 'F').length || 0;
                   const total = scan.results?.length || 0;
                   return (
                     <div
@@ -286,17 +259,16 @@ const Watchlist = () => {
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {new Date(scan.startedAt).toLocaleString()}
-                              {scan.alertTriggered && ' · Voice alert sent'}
                             </p>
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          {scan.results?.map((r: any, j: number) => (
+                          {scan.results?.map((result: WatchlistScanResult, j: number) => (
                             <Badge
                               key={j}
-                              className={`text-xs ${gradeColor[r.grade] || ''}`}
+                              className={`text-xs ${gradeColor[result.grade] || ''}`}
                             >
-                              {r.packageName}: {r.grade}
+                              {result.packageName}: {result.grade}
                             </Badge>
                           ))}
                         </div>
@@ -310,31 +282,6 @@ const Watchlist = () => {
         </motion.div>
       </main>
 
-      {/* Phone dialog */}
-      <Dialog open={phoneDialogOpen} onOpenChange={setPhoneDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Configure Alert Phone</DialogTitle>
-            <DialogDescription>
-              Enter your phone number. If any package on your watchlist receives an F grade during a scan,
-              you'll get a phone call with the details. Press 1 during the call to receive the full report via text.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={phoneInput}
-            onChange={e => setPhoneInput(e.target.value)}
-            placeholder="+1 555 123 4567"
-            type="tel"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPhoneDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handlePhoneSave} disabled={phoneSaving || !phoneInput.trim()}>
-              {phoneSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Phone className="w-4 h-4 mr-2" />}
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

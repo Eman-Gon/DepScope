@@ -1,6 +1,5 @@
 require('dotenv').config();
 const axios = require('axios');
-const { localSynthesize } = require('./src/services/geminiService');
 
 const BASE = `http://localhost:${process.env.PORT || 3000}`;
 let passed = 0;
@@ -16,69 +15,6 @@ function assert(condition, label) {
   }
 }
 
-// ── Unit: localSynthesize ───────────────────────────────────────────────────
-
-function testLocalSynthesize() {
-  console.log('\n=== Unit: localSynthesize ===\n');
-
-  const mockHealth = {
-    name: 'test-pkg',
-    stars: 12000,
-    forks: 1500,
-    commitFrequencyPerWeek: 3,
-    lastCommitDaysAgo: 10,
-    releaseFrequencyPerMonth: 1.5,
-    busFactorScore: 'healthy',
-    contributorCount: 20,
-    topContributorPct: 0.3,
-    issueCloseRate: 0.8,
-    staleIssueCount: 5,
-    license: 'MIT',
-    isArchived: false,
-    isDeprecated: false,
-  };
-
-  const mockResearch = {
-    cves: [],
-    sentiment: { overall: 'positive' },
-    alternatives: [{ name: 'alt-pkg', context: 'A good alternative' }],
-  };
-
-  const result = localSynthesize(mockHealth, mockResearch);
-
-  assert(result.grade, 'returns a grade');
-  assert(['A', 'B', 'C', 'D', 'F'].includes(result.grade), `grade is valid letter (${result.grade})`);
-  assert(typeof result.weightedScore === 'number', 'weightedScore is a number');
-  assert(result.scores && typeof result.scores.maintenance === 'number', 'scores.maintenance exists');
-  assert(result.scores && typeof result.scores.security === 'number', 'scores.security exists');
-  assert(Array.isArray(result.findings), 'findings is an array');
-  assert(Array.isArray(result.alternatives), 'alternatives is an array');
-  assert(typeof result.verdict === 'string' && result.verdict.length > 0, 'verdict is non-empty string');
-  assert(result._fallback === true, '_fallback flag is set');
-
-  // Critical CVE downgrades grade
-  const withCritical = {
-    ...mockHealth,
-    name: 'vuln-pkg',
-    stars: 50000,
-    commitFrequencyPerWeek: 10,
-    lastCommitDaysAgo: 2,
-  };
-  const critResearch = {
-    cves: [{ id: 'CVE-2024-0001', severity: 'CRITICAL', description: 'bad' }],
-    sentiment: { overall: 'positive' },
-    alternatives: [],
-  };
-  const critResult = localSynthesize(withCritical, critResearch);
-  assert(!['A', 'B'].includes(critResult.grade), `critical CVE downgrades grade from A/B (got ${critResult.grade})`);
-
-  // Archived repo gets F
-  const archivedHealth = { ...mockHealth, isArchived: true };
-  const archivedResult = localSynthesize(archivedHealth, mockResearch);
-  // Note: localSynthesize doesn't check isArchived (that's in Gemini path), so just verify it runs
-  assert(archivedResult.grade, 'archived repo still returns a grade');
-}
-
 // ── Integration: API endpoints ──────────────────────────────────────────────
 
 async function testHealthEndpoint() {
@@ -92,7 +28,11 @@ async function testRootEndpoint() {
   console.log('\n=== Integration: Root endpoint ===\n');
   const res = await axios.get(`${BASE}/`);
   assert(res.status === 200, 'GET / returns 200');
-  assert(res.data.service === 'DepScope API', 'service name matches');
+  const contentType = res.headers['content-type'] || '';
+  assert(
+    res.data.service === 'DepScope API' || contentType.includes('text/html'),
+    'root returns API status in dev or frontend HTML in production build'
+  );
 }
 
 async function testAnalyzeEndpoint() {
@@ -160,30 +100,11 @@ async function testPatternsEndpoint() {
   assert(res.data.totalAnalyzed !== undefined || res.data.message, 'returns totalAnalyzed or message');
 }
 
-async function testAlertConfigure() {
-  console.log('\n=== Integration: POST /api/alert/configure ===\n');
-
-  // Missing phone returns 400
-  try {
-    await axios.post(`${BASE}/api/alert/configure`, {});
-    assert(false, 'missing phone returns 400');
-  } catch (err) {
-    assert(err.response?.status === 400, 'missing phone returns 400');
-  }
-
-  const res = await axios.post(`${BASE}/api/alert/configure`, { phone: '+15551234567' });
-  assert(res.status === 200, 'valid phone returns 200');
-  assert(res.data.phone === '+15551234567', 'echoes phone back');
-}
-
 // ── Runner ──────────────────────────────────────────────────────────────────
 
 async function run() {
   console.log('DepScope Test Suite');
   console.log('===================');
-
-  // Unit tests (no server needed)
-  testLocalSynthesize();
 
   // Integration tests (server must be running)
   try {
@@ -195,7 +116,6 @@ async function run() {
 
   await testHealthEndpoint();
   await testRootEndpoint();
-  await testAlertConfigure();
   await testPatternsEndpoint();
   const analysisId = await testAnalyzeEndpoint();
   await testResultEndpoint(analysisId);

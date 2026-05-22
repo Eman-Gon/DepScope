@@ -137,16 +137,16 @@
 | Spec Feature | Status | File |
 |---|---|---|
 | GitHub repo analysis | ✅ Complete | `githubService.js` |
-| You.com CVE search | ✅ Complete | `youService.js` |
-| You.com sentiment | ✅ Complete | `youService.js` |
-| You.com alternatives | ⚠️ Noisy | `youService.js` |
+| OSV/GHSA CVE search | ✅ Complete | `researchService.js` |
+| Tavily sentiment | ✅ Complete | `researchService.js` |
+| Tavily alternatives | ⚠️ Noisy | `researchService.js` |
 | Gemini risk synthesis | ✅ Complete | `geminiService.js` |
 | Gemini model fallback | ✅ Complete | `geminiService.js` |
 | Composio orchestration | ✅ Complete | `composioService.js` |
 | Composio status endpoint | ✅ Complete | `server.js` |
 | SSE streaming | ✅ Complete | `server.js` |
 | Pattern aggregation | ✅ Complete | `server.js` |
-| Plivo voice XML | ✅ Complete | `plivoService.js` + `server.js` |
+| Phone alerts | Removed | Watchlist failures surface in dashboard/API scan history |
 | Plivo DTMF handler | ✅ Complete | `server.js` |
 | Plivo real call test | ❌ Not tested | — |
 | Demo cache fallback | ✅ Complete | `demoCache.js` |

@@ -5,7 +5,7 @@
 2. ~~Verify You.com API key works~~ — Live CVE search, sentiment, alternatives all working
 3. ~~Verify Gemini API key works~~ — Paid key, synthesis runs live (no more 429s)
 4. ~~Test end-to-end pipeline locally~~ — All 4 packages tested: lodash C, express B, moment C, axios B
-5. ~~Integrate Plivo SDK~~ — Voice call + SMS via REST API (plivoService.js)
+5. ~~Remove Plivo phone alerts~~ — Watchlist failures now stay in dashboard/API scan history
 6. ~~Add Composio orchestration~~ — 3 custom tools registered, parallel execution, cached fallback
 7. ~~Pre-cache 2-3 demo results~~ — lodash, moment, express cached in demoCache.js
 

@@ -57,7 +57,7 @@ User Input (npm package / GitHub URL / owner/repo)
 │  Agent 1    │ │  Agent 2     │     ← run in parallel
 │  Repo Health│ │  External    │
 │  (GitHub)   │ │  Research    │
-│             │ │  (You.com)   │
+│             │ │OSV/GHSA/Tavily│
 └──────┬──────┘ └──────┬───────┘
        │               │
        └───────┬───────┘
@@ -68,19 +68,18 @@ User Input (npm package / GitHub URL / owner/repo)
        │  (Gemini AI) │
        └──────┬───────┘
               │
-     ┌────────┴────────┐
-     ▼                 ▼
-┌──────────┐    ┌───────────┐
-│ Dashboard│    │   Plivo   │
-│ (React)  │    │ Voice Call│
-└──────────┘    └───────────┘
+              ▼
+        ┌──────────┐
+        │ Dashboard│
+        │ (React)  │
+        └──────────┘
 ```
 
 Three sequential AI agents orchestrated via Composio (with graceful fallback to direct execution):
 
 1. **Agent 1 — Repo Health Analyzer** queries the GitHub API for stars, forks, commit frequency, contributor distribution, bus factor, issue close rate, stale issue count, release cadence, archived/deprecated status, and license.
 
-2. **Agent 2 — External Researcher** queries the You.com Search API in three parallel threads: CVE database search (with regex-based CVE-ID extraction and severity classification), community sentiment analysis (Reddit, Hacker News, Stack Overflow), and alternative library discovery.
+2. **Agent 2 — External Researcher** queries OSV.dev, GitHub Security Advisories, npm registry metadata, and Tavily web search. OSV/GHSA provide authoritative vulnerability data; Tavily provides community context and alternative discovery.
 
 3. **Agent 3 — Risk Scorer** feeds everything into Google's Gemini model and produces: a 5-dimension score (maintenance, security, stability, community, documentation), a weighted letter grade (A–F), severity-ranked findings with recommendations, vetted alternative packages with migration difficulty ratings, and a 2–3 sentence executive verdict.
 
@@ -91,9 +90,8 @@ Three sequential AI agents orchestrated via Composio (with graceful fallback to 
 | Backend | Node.js + Express 5 |
 | AI Orchestration | Composio SDK |
 | LLM | Google Gemini (flash models with fallback chain) |
-| Search API | You.com Search |
+| Research APIs | OSV.dev + GitHub Security Advisories + npm registry + Tavily |
 | Repository Data | GitHub REST API |
-| Voice Alerts | Plivo (voice + SMS) |
 | Frontend | React 18 + TypeScript + Vite |
 | UI Components | shadcn/ui (Radix primitives) |
 | Charts | Recharts (radar visualization) |
@@ -123,11 +121,6 @@ Three sequential AI agents orchestrated via Composio (with graceful fallback to 
 - Alternatives table with migration difficulty assessment
 - Cross-analysis pattern insights (aggregate stats across multiple analyses)
 
-**Voice Alerts (Plivo)**
-- Automatic phone call on CRITICAL findings
-- Spoken briefing with grade, top finding, and recommendation
-- DTMF handler: press 1 to receive SMS report link, press 2 to dismiss
-
 **Resilience**
 - Gemini model fallback chain (gemini-3-flash-preview → gemini-2.5-flash)
 - Pre-cached analyses for lodash, moment, and express as demo fallback
@@ -135,7 +128,7 @@ Three sequential AI agents orchestrated via Composio (with graceful fallback to 
 
 ### Codebase Size
 
-~2,100 lines of application code (1,360 backend + 740 frontend), 13 API endpoints, 5 integration test files.
+~2,100 lines of application code (backend + frontend), API routes for analysis, reports, watchlists, health/debug, and frontend serving from one container.
 
 ---
 
@@ -186,9 +179,7 @@ The standalone dashboard is a demo. The product becomes indispensable when it's 
 
 ### 4. Deeper Security Analysis
 
-The You.com CVE search is a good starting point but has limitations:
-
-- **Integrate OSV.dev** (Google's Open Source Vulnerability database): Structured, machine-readable CVE data with affected version ranges. Much more reliable than regex-parsing search results.
+- **Expand structured advisory sources**: OSV.dev and GitHub Security Advisories are now the baseline; NVD and deps.dev would add another layer of enrichment.
 - **SBOM generation**: Parse `package-lock.json` / `yarn.lock` to analyze the entire transitive dependency tree, not just direct dependencies.
 - **License compliance**: Flag GPL dependencies in proprietary projects, detect license changes between versions.
 - **Typosquatting detection**: Check if the requested package name is suspiciously close to a popular package (e.g., `lodas` vs `lodash`).

@@ -1,0 +1,11 @@
+node_modules
+Frontend/node_modules
+Frontend/dist
+dist
+build
+.git
+.env
+Frontend/.env
+*.log
+.DS_Store
+.rocketride
