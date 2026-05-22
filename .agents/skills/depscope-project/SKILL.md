@@ -55,7 +55,7 @@ Update this skill when repo truth changes. Update `AGENTS.md` and `claude.md` wh
 
 ## Validation
 
-- Backend smoke tests: `npm test`, `node test.js`, `node test-demo.js`, `node test-full.js`
+- Backend smoke tests: `npm test`, `node test.js`, `node test-demo.js`, `node test-full.js`, `npm run test:integrations`
 - Frontend checks: `cd Frontend && npm run lint`, `cd Frontend && npm run test`, `cd Frontend && npm run build`
 - Docker check: `docker build -t depscope-render .`
 

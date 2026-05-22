@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "test": "node test-research.js",
     "test:github": "node test.js",
+    "test:integrations": "node test-integrations.js",
     "test:api": "node test-api.js"
   },
   "keywords": [],

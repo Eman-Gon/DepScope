@@ -18,3 +18,9 @@
 Plivo phone and SMS alerts have been removed. Watchlist failures are now reported through scan history and the dashboard/API only.
 
 You.com search has been replaced by the research stack above.
+
+## Integration Test Script
+
+Run `npm run test:integrations` to check npm, OSV.dev, GitHub REST, GitHub Security Advisories, Tavily, Gemini, Composio, and the local backend health endpoint.
+
+Optional integrations without configured keys are reported as `SKIP` by default. Use `npm run test:integrations -- --strict` to fail missing optional keys in CI or deployment validation.
